@@ -1,0 +1,26 @@
+{
+  "name": "@devforge/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint not configured yet\"",
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+  "@devforge/config": "workspace:*",
+  "@fastify/cors": "^11.3.0",
+  "dotenv": "^17.4.2",
+  "fastify": "^5.10.0",
+  "zod": "^4.4.3"
+},
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.2"
+  }
+}
