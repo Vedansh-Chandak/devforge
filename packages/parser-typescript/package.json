@@ -1,0 +1,21 @@
+{
+  "name": "@devforge/parser-typescript",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/__tests__/parser.test.ts"
+  },
+  "dependencies": {
+    "typescript": "5.9.2"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "tsx": "^4.23.0"
+  }
+}

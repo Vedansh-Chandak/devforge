@@ -1,0 +1,21 @@
+{
+  "name": "@repo/logger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@devforge/config": "workspace:*",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "5.9.2"
+  }
+}

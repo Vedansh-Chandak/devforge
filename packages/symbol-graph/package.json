@@ -1,0 +1,19 @@
+{
+  "name": "@devforge/symbol-graph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/__tests__/symbol-graph.test.ts"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "tsx": "^4.23.0",
+    "typescript": "5.9.2"
+  }
+}
