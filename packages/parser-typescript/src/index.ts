@@ -1,0 +1,23 @@
+export { parseTypeScript } from "./parser.js";
+export type {
+  ParseResult,
+  ImportDeclaration,
+  ExportDeclaration,
+  ClassDeclaration,
+  InterfaceDeclaration,
+  EnumDeclaration,
+  FunctionDeclaration,
+  TypeAliasDeclaration,
+  NamedImport,
+  NamedExport,
+  TypeParameter,
+  HeritageClause,
+  ExpressionWithTypeArguments,
+  ClassMember,
+  InterfaceMember,
+  EnumMember,
+  Parameter,
+  Modifier,
+  SyntaxError,
+  SourceLocation,
+} from "./types.js";

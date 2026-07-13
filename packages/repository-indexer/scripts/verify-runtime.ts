@@ -29,6 +29,43 @@ const scenarios: ReadonlyArray<Scenario> = [
     expect: "throw",
     expectCode: "NOT_FOUND",
   },
+  {
+    name: "5. root is a file",
+    root: "/tmp/df-pr2-fixture/README.md",
+    expect: "throw",
+    expectCode: "NOT_A_DIRECTORY",
+  },
+  {
+    name: "6. root is a symlink",
+    root: "/tmp/root-symlink",
+    expect: "throw",
+    expectCode: "INVALID_ROOT",
+  },
+  {
+    name: "7. broken symlink inside tree",
+    root: "/tmp/df-pr2-fixture",
+    expect: "ok",
+  },
+  {
+    name: "8. file without extension",
+    root: "/tmp/df-pr2-fixture",
+    expect: "ok",
+  },
+  {
+    name: "9. dotfile (.env)",
+    root: "/tmp/df-pr2-fixture",
+    expect: "ok",
+  },
+  {
+    name: "10. symlink to file inside tree",
+    root: "/tmp/df-pr2-fixture",
+    expect: "ok",
+  },
+  {
+    name: "11. symlink to directory inside tree",
+    root: "/tmp/df-pr2-fixture",
+    expect: "ok",
+  },
 ];
 
 async function run(): Promise<void> {

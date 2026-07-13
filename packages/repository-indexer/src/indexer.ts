@@ -15,6 +15,7 @@ import type {
   RepositoryNode,
   RepositoryTree,
 } from "./types.js";
+import { defaultIgnoreEngine } from "./ignore.js";
 
 function asErrno(err: unknown): NodeJS.ErrnoException {
   if (err instanceof Error) {
@@ -120,11 +121,20 @@ async function walk(
   const name = pathBasename(absolutePath);
   const relativePath = relativePosix(absoluteRoot, absolutePath);
 
+  if (defaultIgnoreEngine.shouldIgnore(relativePath, stat.isDirectory())) {
+    return null;
+  }
+
   if (stat.isDirectory()) {
     const entries = await readDirectorySorted(absolutePath);
 
     const children: RepositoryNode[] = [];
     for (const entry of entries) {
+      const childRelativePath = relativePosix(absoluteRoot, resolvePath(absolutePath, entry));
+      const childStat = await lstat(resolvePath(absolutePath, entry)).catch(() => null);
+      if (childStat && defaultIgnoreEngine.shouldIgnore(childRelativePath, childStat.isDirectory())) {
+        continue;
+      }
       const childAbsolute = resolvePath(absolutePath, entry);
       const child = await walk(childAbsolute, absoluteRoot);
       if (child !== null) {

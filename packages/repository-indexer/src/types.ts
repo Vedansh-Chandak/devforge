@@ -106,3 +106,123 @@ export class RepositoryScanError extends Error {
     this.rootPath = rootPath;
   }
 }
+
+/**
+ * Metadata attached to FileNode by the Metadata Engine.
+ *
+ * `mtimeMs` is the primary field for cache invalidation and change detection.
+ * `mode` includes permission bits and file type flags (e.g., 0o100644).
+ * `inode` is Unix-only; undefined on Windows. Used for hardlink detection.
+ *
+ * All fields are populated from a single `lstat` call per node.
+ */
+export interface FileMetadata {
+  readonly mtimeMs: number;
+  readonly mode: number;
+  readonly inode?: number;
+}
+
+/**
+ * Metadata attached to DirectoryNode by the Metadata Engine.
+ *
+ * Same structure as FileMetadata, but for directories.
+ * Directory mtime changes when entries are added/removed.
+ */
+export interface DirectoryMetadata {
+  readonly mtimeMs: number;
+  readonly mode: number;
+  readonly inode?: number;
+}
+
+/**
+ * Union of all metadata types.
+ */
+export type NodeMetadata = FileMetadata | DirectoryMetadata;
+
+/**
+ * Opaque handle to a RepositoryTree enriched with filesystem metadata.
+ *
+ * The EnrichedTree wraps the original tree (preserving immutability) and
+ * provides access to metadata via getMetadata(), hasMetadata(), and
+ * getAllMetadata().
+ *
+ * Do not construct directly. Use enrichWithMetadata().
+ */
+export interface EnrichedTree {
+  /**
+   * The original, unmodified repository tree.
+   */
+  readonly tree: RepositoryTree;
+
+  /**
+   * Internal brand for type safety. Do not access.
+   */
+  readonly _metadataBrand: symbol;
+}
+
+/**
+ * Failure modes for metadata enrichment.
+ */
+export type MetadataErrorCode = "ROOT_NOT_FOUND" | "ROOT_NOT_ACCESSIBLE";
+
+/**
+ * Error thrown by enrichWithMetadata() on catastrophic failures.
+ *
+ * Node-level errors (file deleted, permission denied) do NOT throw;
+ * they are silently skipped. This error is only thrown when the
+ * root path itself is inaccessible.
+ */
+export class MetadataEnrichmentError extends Error {
+  readonly code: MetadataErrorCode;
+  readonly rootPath: string;
+
+  constructor(code: MetadataErrorCode, rootPath: string, message: string) {
+    super(message);
+    this.name = "MetadataEnrichmentError";
+    this.code = code;
+    this.rootPath = rootPath;
+  }
+}
+
+/**
+ * Programming languages and file types detected by the Language Detection Engine.
+ *
+ * This enum is exhaustive for supported languages. UNKNOWN indicates a file
+ * that is not recognized or not yet supported.
+ *
+ * Detection is based on filename and extension only. No file contents are read.
+ */
+export type Language =
+  | "typescript"
+  | "typescript-react"
+  | "javascript"
+  | "javascript-react"
+  | "python"
+  | "java"
+  | "kotlin"
+  | "rust"
+  | "go"
+  | "cpp"
+  | "c"
+  | "c-header"
+  | "csharp"
+  | "swift"
+  | "php"
+  | "ruby"
+  | "lua"
+  | "markdown"
+  | "yaml"
+  | "json"
+  | "toml"
+  | "xml"
+  | "html"
+  | "css"
+  | "scss"
+  | "sql"
+  | "shell"
+  | "zsh"
+  | "dockerfile"
+  | "makefile"
+  | "cmake"
+  | "groovy"
+  | "unknown";
