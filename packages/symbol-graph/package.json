@@ -8,12 +8,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/__tests__/symbol-graph.test.ts"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^22.15.3",
     "tsx": "^4.23.0",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vitest": "^2.0.0"
   }
 }

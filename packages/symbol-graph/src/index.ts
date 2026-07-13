@@ -1,9 +1,47 @@
-export interface SymbolNode {
-  name: string;
-  kind: string;
-}
-
-export function buildSymbolGraph(files: string[]): SymbolNode[] {
-  // TODO: Implement symbol graph building
-  return [];
-}
+export { buildSymbolGraph } from "./builder.js";
+export {
+  createSymbolGraph,
+  addNode,
+  addEdge,
+  getNode,
+  getOutgoingEdges,
+  getIncomingEdges,
+  getAllNodes,
+  getAllEdges,
+  getNodesByKind,
+  getNodesByFile,
+  serializeSymbolGraph,
+  deserializeSymbolGraph,
+} from "./graph.js";
+export type {
+  SymbolKind,
+  Location,
+  SymbolId,
+  SymbolNode,
+  SymbolEdge,
+  EdgeKind,
+  SymbolGraph,
+  Modifier,
+  TypeParameter,
+  Signature,
+  Parameter,
+  SymbolMetadata,
+  ParsedFile,
+  ImportDeclaration,
+  NamedImport,
+  ExportDeclaration,
+  NamedExport,
+  ClassDeclaration,
+  HeritageClause,
+  ExpressionWithTypeArguments,
+  ClassMember,
+  InterfaceDeclaration,
+  InterfaceMember,
+  EnumDeclaration,
+  EnumMember,
+  FunctionDeclaration,
+  TypeAliasDeclaration,
+  SyntaxError,
+  BuildOptions,
+  TraversalOptions,
+} from "./types.js";
