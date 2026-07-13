@@ -72,6 +72,18 @@ export function getNodesByFile(graph: SymbolGraph, filePath: string): SymbolNode
   return getAllNodes(graph).filter((n) => n.filePath === filePath);
 }
 
+export function hasNode(graph: SymbolGraph, id: SymbolId): boolean {
+  const key = symbolIdToKey(id);
+  return graph.nodes.has(key);
+}
+
+export function hasEdge(graph: SymbolGraph, from: SymbolId, to: SymbolId): boolean {
+  const fromKey = symbolIdToKey(from);
+  const edges = graph.outgoing.get(fromKey) || [];
+  const toKey = symbolIdToKey(to);
+  return edges.some((e) => symbolIdToKey(e.to) === toKey);
+}
+
 export function symbolIdToKey(id: SymbolId): string {
   return `${id.filePath}:${id.kind}:${id.name}:${id.declarationLocation.start}:${id.declarationLocation.end}`;
 }

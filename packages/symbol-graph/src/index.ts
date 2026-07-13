@@ -10,6 +10,8 @@ export {
   getAllEdges,
   getNodesByKind,
   getNodesByFile,
+  hasNode,
+  hasEdge,
   serializeSymbolGraph,
   deserializeSymbolGraph,
 } from "./graph.js";
