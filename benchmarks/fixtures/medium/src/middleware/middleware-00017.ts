@@ -1,0 +1,1 @@
+export type Middleware0001717 = { id: string; data: string; } | null;

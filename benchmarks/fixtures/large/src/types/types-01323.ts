@@ -1,0 +1,1 @@
+export function types013231323(input: string): string { return `Types013231323-${input}`; }

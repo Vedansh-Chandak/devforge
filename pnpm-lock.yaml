@@ -26,12 +26,12 @@ importers:
       '@devforge/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@devforge/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0
-      '@repo/logger':
-        specifier: workspace:*
-        version: link:../../packages/logger
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -89,6 +89,34 @@ importers:
         specifier: 5.9.2
         version: 5.9.2
 
+  packages/benchmark:
+    dependencies:
+      '@devforge/knowledge-graph':
+        specifier: workspace:*
+        version: link:../knowledge-graph
+      '@devforge/parser-typescript':
+        specifier: workspace:*
+        version: link:../parser-typescript
+      '@devforge/repository-indexer':
+        specifier: workspace:*
+        version: link:../repository-indexer
+      '@devforge/symbol-graph':
+        specifier: workspace:*
+        version: link:../symbol-graph
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
   packages/config:
     dependencies:
       zod:
@@ -104,6 +132,9 @@ importers:
       typescript:
         specifier: 5.9.2
         version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
 
   packages/eslint-config:
     devDependencies:
@@ -141,6 +172,34 @@ importers:
         specifier: ^8.50.0
         version: 8.50.0(eslint@9.39.1)(typescript@5.9.2)
 
+  packages/integration-tests:
+    dependencies:
+      '@devforge/knowledge-graph':
+        specifier: workspace:*
+        version: link:../knowledge-graph
+      '@devforge/parser-typescript':
+        specifier: workspace:*
+        version: link:../parser-typescript
+      '@devforge/repository-indexer':
+        specifier: workspace:*
+        version: link:../repository-indexer
+      '@devforge/symbol-graph':
+        specifier: workspace:*
+        version: link:../symbol-graph
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
   packages/knowledge-graph:
     dependencies:
       '@devforge/symbol-graph':
@@ -172,6 +231,9 @@ importers:
       typescript:
         specifier: 5.9.2
         version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
 
   packages/parser-typescript:
     dependencies:

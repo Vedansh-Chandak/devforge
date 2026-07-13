@@ -1,0 +1,1 @@
+export class Decorators00654654 { constructor(public id: string) {} method() { return "Decorators00654654"; } }

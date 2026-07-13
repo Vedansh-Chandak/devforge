@@ -1,0 +1,1 @@
+export function dtos00919919(input: string): string { return `Dtos00919919-${input}`; }

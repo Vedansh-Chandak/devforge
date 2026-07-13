@@ -1,0 +1,1 @@
+export interface Components021442144 { id: string; name: string; value: number; }

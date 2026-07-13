@@ -1,0 +1,1 @@
+export type Components0002929 = { id: string; data: string; } | null;

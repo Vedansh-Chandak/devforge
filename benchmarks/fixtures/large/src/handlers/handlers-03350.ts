@@ -1,0 +1,1 @@
+export class Handlers033503350 { constructor(public id: string) {} method() { return "Handlers033503350"; } }

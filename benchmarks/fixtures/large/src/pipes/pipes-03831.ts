@@ -1,0 +1,1 @@
+export function pipes038313831(input: string): string { return `Pipes038313831-${input}`; }

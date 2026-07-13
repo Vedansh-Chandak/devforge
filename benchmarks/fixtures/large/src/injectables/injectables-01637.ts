@@ -1,0 +1,1 @@
+export type Injectables016371637 = { id: string; data: string; } | null;

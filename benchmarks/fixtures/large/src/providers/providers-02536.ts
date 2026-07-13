@@ -1,0 +1,1 @@
+export interface Providers025362536 { id: string; name: string; value: number; }

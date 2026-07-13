@@ -1,0 +1,1 @@
+export function services00251251(input: string): string { return `Services00251251-${input}`; }

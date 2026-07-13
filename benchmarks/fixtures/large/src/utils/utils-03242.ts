@@ -1,0 +1,1 @@
+export class Utils032423242 { constructor(public id: string) {} method() { return "Utils032423242"; } }

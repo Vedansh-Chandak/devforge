@@ -1,0 +1,1 @@
+export class Repositories029662966 { constructor(public id: string) {} method() { return "Repositories029662966"; } }

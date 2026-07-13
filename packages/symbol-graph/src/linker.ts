@@ -28,16 +28,22 @@ export function linkSymbols(
 ): SymbolEdge[] {
   const edges: SymbolEdge[] = [];
 
+  // Build filePath -> ParsedFile map for O(1) module resolution
+  const parsedFilesByPath = new Map<string, ParsedFile>();
+  for (const f of allParsedFiles) {
+    parsedFilesByPath.set(f.filePath, f);
+  }
+
   for (const parsedFile of allParsedFiles) {
     const fileSymbols = fileSymbolsMap.get(parsedFile.filePath);
     if (!fileSymbols) continue;
 
     for (const imp of parsedFile.imports) {
-      edges.push(...createImportEdges(parsedFile, imp, fileSymbolsMap));
+      edges.push(...createImportEdges(parsedFile, imp, fileSymbolsMap, parsedFilesByPath));
     }
 
     for (const exp of parsedFile.exports) {
-      edges.push(...createExportEdges(parsedFile, exp, fileSymbolsMap));
+      edges.push(...createExportEdges(parsedFile, exp, fileSymbolsMap, parsedFilesByPath));
     }
   }
 
@@ -64,12 +70,13 @@ export function linkSymbols(
 function createImportEdges(
   parsedFile: ParsedFile,
   imp: ImportDeclaration,
-  fileSymbolsMap: Map<string, FileSymbols>
+  fileSymbolsMap: Map<string, FileSymbols>,
+  parsedFilesByPath: Map<string, ParsedFile>
 ): SymbolEdge[] {
   const edges: SymbolEdge[] = [];
   const fromFilePath = parsedFile.filePath;
 
-  const resolvedModule = resolveModuleSpecifier(imp.moduleSpecifier, fromFilePath, allParsedFiles);
+  const resolvedModule = resolveModuleSpecifier(imp.moduleSpecifier, fromFilePath, parsedFilesByPath);
   if (!resolvedModule) return edges;
 
   const targetFileSymbols = fileSymbolsMap.get(resolvedModule);
@@ -105,13 +112,14 @@ function createImportEdges(
 function createExportEdges(
   parsedFile: ParsedFile,
   exp: ExportDeclaration,
-  fileSymbolsMap: Map<string, FileSymbols>
+  fileSymbolsMap: Map<string, FileSymbols>,
+  parsedFilesByPath: Map<string, ParsedFile>
 ): SymbolEdge[] {
   const edges: SymbolEdge[] = [];
   const fromFileSymbolId = createFileSymbolId(parsedFile.filePath);
 
   if (exp.moduleSpecifier) {
-    const resolvedModule = resolveModuleSpecifier(exp.moduleSpecifier, parsedFile.filePath, allParsedFiles);
+    const resolvedModule = resolveModuleSpecifier(exp.moduleSpecifier, parsedFile.filePath, parsedFilesByPath);
     if (!resolvedModule) return edges;
 
     const targetFileSymbols = fileSymbolsMap.get(resolvedModule);
@@ -249,30 +257,39 @@ function createEnumContainmentEdges(
 function resolveModuleSpecifier(
   specifier: string,
   fromFilePath: string,
-  allParsedFiles: ParsedFile[]
+  parsedFilesByPath: Map<string, ParsedFile>
 ): string | null {
   if (specifier.startsWith(".")) {
+    // Normalize the fromFilePath to get its directory
     const dir = fromFilePath.substring(0, fromFilePath.lastIndexOf("/") + 1);
     let resolved = dir + specifier;
-    resolved = resolved.replace(/\/\.\//g, "/");
-    while (resolved.includes("/../")) {
-      resolved = resolved.replace(/[^/]+\/\.\.\//, "");
+    
+    // Normalize path: remove . and resolve ..
+    const parts = resolved.split("/");
+    const normalized: string[] = [];
+    for (const part of parts) {
+      if (part === "." || part === "") {
+        continue;
+      } else if (part === "..") {
+        if (normalized.length > 0) {
+          normalized.pop();
+        }
+      } else {
+        normalized.push(part);
+      }
     }
-    // Remove leading "./" 
-    resolved = resolved.replace(/^\.\//, "");
+    resolved = normalized.join("/");
+    
     if (!resolved.endsWith(".ts") && !resolved.endsWith(".js")) {
       resolved += ".ts";
     }
-    const matchingFile = allParsedFiles.find((f) => f.filePath === resolved || f.filePath === resolved.replace(/\.ts$/, ""));
+    
+    // Ensure the resolved path doesn't escape the workspace
+    // by checking it's within the known files
+    const matchingFile = parsedFilesByPath.get(resolved) ?? parsedFilesByPath.get(resolved.replace(/\.ts$/, ""));
     if (matchingFile) return matchingFile.filePath;
   }
   return null;
-}
-
-let allParsedFiles: ParsedFile[] = [];
-
-export function setAllParsedFiles(files: ParsedFile[]): void {
-  allParsedFiles = files;
 }
 
 function createFileSymbolId(filePath: string): SymbolId {

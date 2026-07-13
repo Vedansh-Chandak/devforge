@@ -1,0 +1,1 @@
+export function modules010751075(input: string): string { return `Modules010751075-${input}`; }

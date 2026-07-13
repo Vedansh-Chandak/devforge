@@ -1,0 +1,1 @@
+export function models0003535(input: string): string { return `Models0003535-${input}`; }

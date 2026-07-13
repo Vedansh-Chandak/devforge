@@ -1,0 +1,1 @@
+export interface Models00760760 { id: string; name: string; value: number; }

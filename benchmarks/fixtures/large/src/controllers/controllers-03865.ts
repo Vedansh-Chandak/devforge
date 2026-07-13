@@ -1,0 +1,1 @@
+export type Controllers038653865 = { id: string; data: string; } | null;

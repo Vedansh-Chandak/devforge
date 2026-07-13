@@ -1,0 +1,25 @@
+{
+  "fixture": "medium",
+  "fileCount": 502,
+  "typescriptFileCount": 500,
+  "timings": {
+    "indexingMs": 30,
+    "metadataMs": 7,
+    "languageDetectionMs": 1,
+    "parsingMs": 59,
+    "symbolGraphMs": 4,
+    "knowledgeGraphMs": 1,
+    "totalMs": 102
+  },
+  "counts": {
+    "symbolCount": 1125,
+    "symbolEdgeCount": 625,
+    "knowledgeNodeCount": 75,
+    "knowledgeEdgeCount": 0
+  },
+  "memory": {
+    "heapUsedMB": 36.02,
+    "heapTotalMB": 50.06,
+    "externalMB": 2.1
+  }
+}

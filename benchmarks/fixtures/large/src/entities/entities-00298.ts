@@ -1,0 +1,1 @@
+export class Entities00298298 { constructor(public id: string) {} method() { return "Entities00298298"; } }

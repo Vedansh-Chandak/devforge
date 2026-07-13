@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-07-13T19:43:26.731Z",
+  "size": "medium",
+  "results": [
+    {
+      "fixture": "medium",
+      "fileCount": 502,
+      "typescriptFileCount": 500,
+      "timings": {
+        "indexingMs": 28,
+        "metadataMs": 8,
+        "languageDetectionMs": 1,
+        "parsingMs": 61,
+        "symbolGraphMs": 4,
+        "knowledgeGraphMs": 2,
+        "totalMs": 104
+      },
+      "counts": {
+        "symbolCount": 1125,
+        "symbolEdgeCount": 625,
+        "knowledgeNodeCount": 75,
+        "knowledgeEdgeCount": 0
+      },
+      "memory": {
+        "heapUsedMB": 35.9,
+        "heapTotalMB": 50.06,
+        "externalMB": 2.1
+      }
+    }
+  ]
+}

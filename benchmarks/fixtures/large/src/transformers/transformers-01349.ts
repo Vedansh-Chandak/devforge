@@ -1,0 +1,1 @@
+export type Transformers013491349 = { id: string; data: string; } | null;
