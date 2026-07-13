@@ -13,6 +13,10 @@ export {
   findModuleServices,
   findModuleApis,
   getGraphStats,
+  getNodesByModule,
+  hasDependency,
+  hasNode,
+  getNodesByKind,
 } from "./query.js";
 
 export type {

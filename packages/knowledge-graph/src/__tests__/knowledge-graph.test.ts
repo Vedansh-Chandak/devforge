@@ -9,6 +9,9 @@ import {
   findModuleServices,
   findModuleApis,
   getGraphStats,
+  getNodesByModule,
+  hasDependency,
+  hasNode,
 } from "../index.js";
 import { createSymbolGraph } from "@devforge/symbol-graph";
 import type { SymbolNode, SymbolId, SymbolGraph, EdgeKind, ParsedFile } from "@devforge/symbol-graph";
@@ -336,6 +339,64 @@ describe("Knowledge Graph", () => {
       const stats = getGraphStats(emptyKg);
       expect(stats.nodeCount).toBe(0);
       expect(stats.edgeCount).toBe(0);
+    });
+  });
+
+  describe("Public Query API", () => {
+    it("should get nodes by module", () => {
+      const nodes = getNodesByModule(kg, "users");
+      const names = nodes.map((n) => n.name).sort();
+      // Only services, APIs, and repositories are connected via "contains" edges
+      expect(names).toContain("UserController");
+      expect(names).toContain("UserService");
+      expect(names).toContain("UserRepository");
+      // UserEntity is an entity, not connected via contains edge
+      // UserModule is the module itself, not a child
+    });
+
+    it("should return empty array for non-existent module", () => {
+      const nodes = getNodesByModule(kg, "nonexistent");
+      expect(nodes).toEqual([]);
+    });
+
+    it("should check hasNode for existing node", () => {
+      expect(hasNode(kg, { kind: "service", name: "UserService" })).toBe(true);
+      expect(hasNode(kg, { kind: "repository", name: "UserRepository" })).toBe(true);
+      expect(hasNode(kg, { kind: "module", name: "users" })).toBe(true);
+    });
+
+    it("should check hasNode for non-existing node", () => {
+      expect(hasNode(kg, { kind: "service", name: "NonExistent" })).toBe(false);
+      expect(hasNode(kg, { kind: "repository", name: "NonExistent" })).toBe(false);
+    });
+
+    it("should check hasDependency for existing dependency", () => {
+      expect(hasDependency(kg, { kind: "service", name: "UserService" }, { kind: "repository", name: "UserRepository" })).toBe(true);
+      expect(hasDependency(kg, { kind: "repository", name: "UserRepository" }, { kind: "database", name: "PrismaDatabase" })).toBe(true);
+      expect(hasDependency(kg, { kind: "api", name: "ApiController" }, { kind: "service", name: "AuthService" })).toBe(true);
+    });
+
+    it("should check hasDependency for non-existing dependency", () => {
+      expect(hasDependency(kg, { kind: "service", name: "UserService" }, { kind: "repository", name: "NonExistent" })).toBe(false);
+      expect(hasDependency(kg, { kind: "api", name: "ApiController" }, { kind: "service", name: "NonExistent" })).toBe(false);
+    });
+
+    it("should return false for hasDependency when from node does not exist", () => {
+      expect(hasDependency(kg, { kind: "service", name: "NonExistent" }, { kind: "repository", name: "UserRepository" })).toBe(false);
+    });
+
+    it("should return false for hasDependency when to node does not exist", () => {
+      expect(hasDependency(kg, { kind: "service", name: "UserService" }, { kind: "repository", name: "NonExistent" })).toBe(false);
+    });
+
+    it("should handle empty graph queries", () => {
+      const emptyGraph = createSymbolGraph();
+      const emptyParsedFiles: ParsedFile[] = [];
+      const emptyKg = buildKnowledgeGraph(emptyGraph, emptyParsedFiles);
+
+      expect(getNodesByModule(emptyKg, "users")).toEqual([]);
+      expect(hasNode(emptyKg, { kind: "service", name: "UserService" })).toBe(false);
+      expect(hasDependency(emptyKg, { kind: "service", name: "UserService" }, { kind: "repository", name: "UserRepository" })).toBe(false);
     });
   });
 });

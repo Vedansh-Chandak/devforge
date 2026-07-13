@@ -5,7 +5,7 @@ import type {
   KnowledgeEdge,
   KnowledgeEdgeKind,
 } from "./types.js";
-import { getNode, getAllNodes, getAllEdges, getEdgesFrom, getEdgesTo } from "./graph.js";
+import { getNode, getAllNodes, getAllEdges, getEdgesFrom, getEdgesTo, hasNode as hasNodeInGraph, getNodesByKind } from "./graph.js";
 
 export function getNodeById(graph: KnowledgeGraph, id: KnowledgeNodeId): KnowledgeNode | undefined {
   return getNode(graph, id);
@@ -108,4 +108,30 @@ export function getGraphStats(graph: KnowledgeGraph): {
     nodesByKind,
     edgesByKind,
   };
+}
+
+export { getNodesByKind };
+
+export function getNodesByModule(graph: KnowledgeGraph, moduleName: string): KnowledgeNode[] {
+  const moduleId: KnowledgeNodeId = { kind: "module", name: moduleName };
+  const edges = getEdgesFrom(graph, moduleId, "contains");
+  const nodes: KnowledgeNode[] = [];
+
+  for (const edge of edges) {
+    const node = getNode(graph, edge.to);
+    if (node) {
+      nodes.push(node);
+    }
+  }
+
+  return nodes;
+}
+
+export function hasNode(graph: KnowledgeGraph, id: KnowledgeNodeId): boolean {
+  return hasNodeInGraph(graph, id);
+}
+
+export function hasDependency(graph: KnowledgeGraph, from: KnowledgeNodeId, to: KnowledgeNodeId): boolean {
+  const edges = getEdgesFrom(graph, from, "dependsOn");
+  return edges.some((edge) => edge.to.kind === to.kind && edge.to.name === to.name);
 }
