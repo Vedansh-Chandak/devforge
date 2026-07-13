@@ -1,16 +1,27 @@
-import { resolve as resolvePath, relative, sep, posix } from "node:path";
+import {
+  resolve as resolvePath,
+  basename as pathBasename,
+  extname,
+  relative,
+  sep,
+  posix,
+} from "node:path";
 import { lstat, readdir } from "node:fs/promises";
 
+import { RepositoryScanError } from "./types.js";
 import type {
   DirectoryNode,
   FileNode,
   RepositoryNode,
   RepositoryTree,
-  ScanError,
-  ScanOptions,
-  ScanResult,
 } from "./types.js";
-import { createIgnoreMatcher, type IgnoreMatcher } from "./ignore.js";
+
+function asErrno(err: unknown): NodeJS.ErrnoException {
+  if (err instanceof Error) {
+    return err as NodeJS.ErrnoException;
+  }
+  return new Error(String(err)) as NodeJS.ErrnoException;
+}
 
 function pathToPosix(p: string): string {
   if (sep === posix.sep) return p;
@@ -18,64 +29,82 @@ function pathToPosix(p: string): string {
 }
 
 function relativePosix(from: string, to: string): string {
-  const rel = relative(from, to);
-  if (rel === "" || rel === ".") return "";
-  return pathToPosix(rel);
+  return pathToPosix(relative(from, to));
 }
 
-function basename(p: string): string {
-  const norm = pathToPosix(p);
-  const idx = norm.lastIndexOf("/");
-  return idx === -1 ? norm : norm.slice(idx + 1);
+function extensionOf(name: string): string {
+  const ext = pathToPosix(extname(name));
+  return ext.startsWith(".") ? ext.slice(1) : ext;
 }
 
-function toScanError(root: string, code: ScanError["code"], message: string): ScanError {
-  return { code, message, rootPath: root };
-}
-
-function classifyRootError(root: string, err: NodeJS.ErrnoException): ScanError {
+function classifyRootError(
+  root: string,
+  err: NodeJS.ErrnoException,
+): RepositoryScanError {
   switch (err.code) {
     case "ENOENT":
-      return toScanError(root, "NOT_FOUND", `Root path does not exist: ${root}`);
+      return new RepositoryScanError(
+        "NOT_FOUND",
+        root,
+        `Repository path does not exist: ${root}`,
+      );
     case "ENOTDIR":
-      return toScanError(root, "NOT_A_DIRECTORY", `Root path is not a directory: ${root}`);
+      return new RepositoryScanError(
+        "NOT_A_DIRECTORY",
+        root,
+        `Repository path is not a directory: ${root}`,
+      );
     case "EACCES":
     case "EPERM":
-      return toScanError(
-        root,
+      return new RepositoryScanError(
         "PERMISSION_DENIED",
-        `Root path is not readable due to permissions: ${root}`,
+        root,
+        `Repository path is not readable due to permissions: ${root}`,
       );
     default:
-      return toScanError(
-        root,
+      return new RepositoryScanError(
         "INVALID_ROOT",
-        `Unable to access root path: ${root} (${err.code ?? "UNKNOWN"})`,
+        root,
+        `Unable to access repository path (${err.code ?? "UNKNOWN"}): ${root}`,
       );
   }
 }
 
 function compareLexicographic(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { numeric: false, sensitivity: "variant" });
-}
-
-interface WalkContext {
-  readonly absoluteRoot: string;
-  readonly relativeRoot: string;
-  readonly totalNodes: { value: number };
-  readonly matcher: IgnoreMatcher;
+  return a.localeCompare(b, undefined, {
+    numeric: false,
+    sensitivity: "variant",
+  });
 }
 
 async function readDirectorySorted(absoluteDir: string): Promise<string[]> {
-  const names = await readdir(absoluteDir);
-  names.sort(compareLexicographic);
-  return names;
+  try {
+    const names = await readdir(absoluteDir);
+    names.sort(compareLexicographic);
+    return names;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Read-and-sort the **root** directory. Throws a typed `RepositoryScanError`
+ * on failure — per the approved design, root-level races after the initial
+ * `lstat` must throw rather than silently produce an empty tree.
+ */
+async function readRootDirectory(root: string, absoluteRoot: string): Promise<string[]> {
+  try {
+    const names = await readdir(absoluteRoot);
+    names.sort(compareLexicographic);
+    return names;
+  } catch (err) {
+    throw classifyRootError(root, asErrno(err));
+  }
 }
 
 async function walk(
   absolutePath: string,
-  ctx: WalkContext,
-  depth: number,
+  absoluteRoot: string,
 ): Promise<RepositoryNode | null> {
   let stat;
   try {
@@ -88,25 +117,16 @@ async function walk(
     return null;
   }
 
-  const name = basename(absolutePath);
-  const relPath = relativePosix(ctx.absoluteRoot, absolutePath);
-  ctx.totalNodes.value += 1;
+  const name = pathBasename(absolutePath);
+  const relativePath = relativePosix(absoluteRoot, absolutePath);
 
   if (stat.isDirectory()) {
-    let entries: string[];
-    try {
-      entries = await readDirectorySorted(absolutePath);
-    } catch {
-      return null;
-    }
+    const entries = await readDirectorySorted(absolutePath);
 
     const children: RepositoryNode[] = [];
     for (const entry of entries) {
-      if (ctx.matcher.shouldIgnore(entry)) {
-        continue;
-      }
       const childAbsolute = resolvePath(absolutePath, entry);
-      const child = await walk(childAbsolute, ctx, depth + 1);
+      const child = await walk(childAbsolute, absoluteRoot);
       if (child !== null) {
         children.push(child);
       }
@@ -115,7 +135,8 @@ async function walk(
     const dirNode: DirectoryNode = {
       type: "directory",
       name,
-      path: relPath,
+      relativePath,
+      absolutePath,
       children,
     };
     return dirNode;
@@ -125,7 +146,10 @@ async function walk(
     const fileNode: FileNode = {
       type: "file",
       name,
-      path: relPath,
+      relativePath,
+      absolutePath,
+      extension: extensionOf(name),
+      size: stat.size,
     };
     return fileNode;
   }
@@ -133,21 +157,52 @@ async function walk(
   return null;
 }
 
+function countDescendants(node: DirectoryNode): number {
+  let count = 0;
+  for (const child of node.children) {
+    count += 1;
+    if (child.type === "directory") {
+      count += countDescendants(child);
+    }
+  }
+  return count;
+}
+
 /**
  * Recursively walks the filesystem rooted at `root` and returns a
  * `RepositoryTree`. Root-level failures (missing path, file-where-folder,
- * permission denied) are surfaced as `{ ok: false, error }`; subtree
- * failures (unreadable subdirectory, broken symlink, race-condition
- * disappearance) are silently skipped so the rest of the tree is
- * preserved.
+ * permission denied, root is a symlink, root readdir races) throw a
+ * `RepositoryScanError`; subtree failures (unreadable subdirectory,
+ * broken symlink, race disappearance) are silently omitted so the rest of
+ * the tree is preserved.
  *
- * Symlinks are not followed and are not represented in this milestone
- * (DF-005.2). DF-005.3+ may add a `SymlinkNode` variant to the union.
+ * Symlinks are not followed. A broken symlink appears as a missing entry.
+ * Files are never read; `{ extension, size }` are populated from `lstat`.
+ *
+ * ## Dotfiles
+ *
+ * Dotfiles whose name **starts** with a dot (e.g. `.env`, `.gitignore`)
+ * have `extension === ""` because Node's `path.extname` treats leading-dot
+ * hidden names as having no extension. This is the intended behavior.
+ *
+ * ## Known limitations
+ *
+ * - **Deep recursion.** The walker descends one `await` per directory
+ *   level. Pure JS engines do not enforce synchronous stack depth on
+ *   `await`-separated recursion, but very large trees (≥10⁴ nested
+ *   directories on the same branch) can approach runaway memory and
+ *   latency. A future story should add a bounded-concurrency variant.
+ *   This implementation is **not** a security boundary against
+ *   adversarial file depth.
+ * - **Race windows.** A file or directory removed between `readdir` and
+ *   `lstat` is silently omitted. The function never crashes, but the
+ *   resulting tree may reflect filesystem state at *N+1* observation
+ *   points rather than a single snapshot.
+ * - **Cross-filesystem behavior.** Symlinks and metadata semantics follow
+ *   the host OS exactly. There is no abstraction layer (overlay FS,
+ *   virtual FS, etc.).
  */
-export async function scanRepository(
-  root: string,
-  options?: ScanOptions,
-): Promise<ScanResult> {
+export async function scanRepository(root: string): Promise<RepositoryTree> {
   const startedAt = Date.now();
   const absoluteRoot = resolvePath(root);
 
@@ -155,49 +210,31 @@ export async function scanRepository(
   try {
     rootStat = await lstat(absoluteRoot);
   } catch (err) {
-    return { ok: false, error: classifyRootError(root, asErrno(err)) };
+    throw classifyRootError(root, asErrno(err));
+  }
+
+  if (rootStat.isSymbolicLink()) {
+    throw new RepositoryScanError(
+      "INVALID_ROOT",
+      root,
+      `Repository path is a symbolic link; root symlinks are not followed: ${root}`,
+    );
   }
 
   if (!rootStat.isDirectory()) {
-    if (rootStat.isSymbolicLink()) {
-      return {
-        ok: false,
-        error: toScanError(
-          root,
-          "NOT_A_DIRECTORY",
-          `Root is a symbolic link; this build does not follow root symlinks: ${root}`,
-        ),
-      };
-    }
-    return {
-      ok: false,
-      error: toScanError(root, "NOT_A_DIRECTORY", `Root path is not a directory: ${root}`),
-    };
+    throw new RepositoryScanError(
+      "NOT_A_DIRECTORY",
+      root,
+      `Repository path is not a directory: ${root}`,
+    );
   }
-
-  const ctx: WalkContext = {
-    absoluteRoot,
-    relativeRoot: "",
-    totalNodes: { value: 1 },
-    matcher: createIgnoreMatcher(
-      options?.ignore ? { extra: options.ignore } : undefined,
-    ),
-  };
 
   const rootChildren: RepositoryNode[] = [];
-  let entryNames: string[];
-  try {
-    entryNames = await readDirectorySorted(absoluteRoot);
-  } catch (err) {
-    return { ok: false, error: classifyRootError(root, asErrno(err)) };
-  }
+  const entries = await readRootDirectory(root, absoluteRoot);
 
-  for (const entry of entryNames) {
-    if (ctx.matcher.shouldIgnore(entry)) {
-      continue;
-    }
+  for (const entry of entries) {
     const childAbsolute = resolvePath(absoluteRoot, entry);
-    const child = await walk(childAbsolute, ctx, 1);
+    const child = await walk(childAbsolute, absoluteRoot);
     if (child !== null) {
       rootChildren.push(child);
     }
@@ -205,25 +242,18 @@ export async function scanRepository(
 
   const rootNode: DirectoryNode = {
     type: "directory",
-    name: basename(absoluteRoot),
-    path: "",
+    name: pathBasename(absoluteRoot),
+    relativePath: "",
+    absolutePath: absoluteRoot,
     children: rootChildren,
   };
 
-  const tree: RepositoryTree = {
+  const totalNodes = 1 + countDescendants(rootNode);
+
+  return {
     root: rootNode,
     rootPath: root,
     scannedAt: new Date(startedAt).toISOString(),
-    totalNodes: ctx.totalNodes.value,
+    totalNodes,
   };
-
-  return { ok: true, tree };
-}
-
-function asErrno(err: unknown): NodeJS.ErrnoException {
-  if (err instanceof Error) {
-    return err as NodeJS.ErrnoException;
-  }
-  const e = new Error(String(err)) as NodeJS.ErrnoException;
-  return e;
 }

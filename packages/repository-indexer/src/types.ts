@@ -12,14 +12,23 @@ export type NodeType = "file" | "directory";
 /**
  * A regular file in the repository.
  *
- * `path` is the path **relative to the repository root**, using forward
+ * `relativePath` is the path relative to the repository root, using forward
  * slashes regardless of host OS. Consumers must never reach back to disk
- * via this path — the tree is the sole source of truth.
+ * via `relativePath` — the tree is the sole source of truth.
+ *
+ * `absolutePath` is provided for out-of-kernel tooling (CLI diff, cache
+ * keys). Kernel stages (parser, graph, AI) should prefer `relativePath`.
+ *
+ * `extension` does NOT include the leading dot. The empty string means no
+ * extension.
  */
 export interface FileNode {
   readonly type: "file";
   readonly name: string;
-  readonly path: string;
+  readonly relativePath: string;
+  readonly absolutePath: string;
+  readonly extension: string;
+  readonly size: number;
 }
 
 /**
@@ -32,7 +41,8 @@ export interface FileNode {
 export interface DirectoryNode {
   readonly type: "directory";
   readonly name: string;
-  readonly path: string;
+  readonly relativePath: string;
+  readonly absolutePath: string;
   readonly children: ReadonlyArray<RepositoryNode>;
 }
 
@@ -50,9 +60,13 @@ export type RepositoryNode = FileNode | DirectoryNode;
  *
  * Owns session metadata (`rootPath`, `scannedAt`, `totalNodes`) separately
  * from the structural root, so downstream stages can:
- *  - walk from `root` without unwrapping;
- *  - invalidate caches via `scannedAt`;
- *  - bound their work via `totalNodes`.
+ *  - walk from `tree.root` without unwrapping;
+ *  - invalidate caches via `tree.scannedAt`;
+ *  - bound their work via `tree.totalNodes`.
+ *
+ * `rootPath` is exactly the string the caller passed to `scanRepository`.
+ * `totalNodes` includes the root directory and every successfully-visited
+ * descendant. Subtrees pruned due to errors are NOT counted.
  */
 export interface RepositoryTree {
   readonly root: DirectoryNode;
@@ -62,25 +76,11 @@ export interface RepositoryTree {
 }
 
 /**
- * Options for a repository scan.
- *
- * The interface is reserved at the foundation level; all fields are
- * optional so callers can pass an empty object today. Future milestones
- * will add `ignore`, `maxDepth`, `followSymlinks`, `concurrency` —
- * all non-breakingly.
- */
-export interface ScanOptions {
-  readonly ignore?: ReadonlyArray<string>;
-  readonly maxDepth?: number;
-  readonly followSymlinks?: boolean;
-}
-
-/**
- * Top-level failure modes of `scanRepository`.
+ * Top-level failure modes of `scanRepository`. Thrown values carry this code
+ * as the `.code` field on `RepositoryScanError`.
  *
  * Subtree-level failures (unreadable directory, broken symlink) do NOT
- * fail the whole scan; they are represented inside `RepositoryNode`s
- * by future milestones. This enum is only for root-level failures.
+ * throw — they are silently omitted from the tree.
  */
 export type ScanErrorCode =
   | "NOT_FOUND"
@@ -88,21 +88,21 @@ export type ScanErrorCode =
   | "PERMISSION_DENIED"
   | "INVALID_ROOT";
 
-export interface ScanError {
-  readonly code: ScanErrorCode;
-  readonly message: string;
-  readonly rootPath: string;
-}
-
 /**
- * Result envelope returned by `scanRepository`.
+ * Base class for scan-level errors. Always thrown, never returned.
  *
- * Modeled as a discriminated union rather than a thrown exception so that:
- *  - consumers handle root-level failures at the type level
- *    (no `try/catch` everywhere);
- *  - the result composes with `Promise.all` and structured concurrency;
- *  - it matches the rest of DevForge's "errors as values" pattern.
+ * The class is the canonical error surface for `scanRepository`. It
+ * subclasses `Error` so `instanceof Error` keeps working in catch-all
+ * handlers, but its real discriminator is the `.code` field.
  */
-export type ScanResult =
-  | { readonly ok: true; readonly tree: RepositoryTree }
-  | { readonly ok: false; readonly error: ScanError };
+export class RepositoryScanError extends Error {
+  readonly code: ScanErrorCode;
+  readonly rootPath: string;
+
+  constructor(code: ScanErrorCode, rootPath: string, message: string) {
+    super(message);
+    this.name = "RepositoryScanError";
+    this.code = code;
+    this.rootPath = rootPath;
+  }
+}
