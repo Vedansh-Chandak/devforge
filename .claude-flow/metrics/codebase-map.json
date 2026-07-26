@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-13T19:43:01.790Z",
+  "timestamp": "2026-07-13T19:59:25.116Z",
   "projectRoot": "/Users/vedanshchandak/Desktop/devforge",
   "structure": {
     "hasPackageJson": true,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1783971781790
+  "scannedAt": 1783972765116
 }

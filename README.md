@@ -1,159 +1,274 @@
-# Turborepo starter
+# DevForge
 
-This Turborepo starter is maintained by the Turborepo core team.
+**A TypeScript-first monorepo for building AI-powered code intelligence tools.**
 
-## Using this example
+DevForge provides a modular pipeline for repository analysis: from filesystem scanning through symbol extraction, dependency resolution, knowledge graph construction, and context building for LLM-assisted development workflows.
 
-Run the following command:
+---
 
-```sh
-npx create-turbo@latest
+## Why DevForge Exists
+
+Modern AI coding assistants need precise, structured context about codebases to be effective. Raw file contents exceed token budgets and lack semantic relationships. DevForge solves this by:
+
+1. **Indexing** — Fast, incremental filesystem scanning with metadata enrichment
+2. **Language Detection** — Extension + filename-based classification (30+ languages)
+3. **Parsing** — TypeScript AST parsing extracting imports, exports, classes, interfaces, functions, types
+4. **Symbol Graph** — Cross-file symbol resolution with typed edges (imports, extends, implements, calls, references)
+5. **Knowledge Graph** — Architectural abstraction layer grouping symbols into modules, services, APIs, repositories, databases
+6. **Context Building** — Token-budgeted, relevance-ranked context assembly for LLM consumption (design-only, not yet implemented)
+
+All stages are **pure TypeScript**, **deterministic**, **side-effect-free**, and **LLM-agnostic**.
+
+---
+
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              DEVFORGE PIPELINE                                     │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+  │  Repository  │───▶│  Language        │───▶│  TypeScript Parser  │
+  │  Indexer     │    │  Detection       │    │  (parser-typescript)│
+  └──────────────┘    └──────────────────┘    └──────────┬──────────┘
+                                                         │
+                                                         ▼
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                     SYMBOL GRAPH (symbol-graph)                     │
+  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐  │
+  │  │  Symbols    │──│  Imports    │──│  Extends    │──│  Calls    │  │
+  │  │  (Nodes)    │  │  (Edges)    │  │  (Edges)    │  │  (Edges)  │  │
+  │  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘  │
+  └────────────────────────────┬────────────────────────────────────────┘
+                               │
+                               ▼
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                   KNOWLEDGE GRAPH (knowledge-graph)                 │
+  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌────────────┐ ┌────────┐  │
+  │  │ Module  │──│ Service │──│  API    │──│ Repository │ │Database│  │
+  │  └─────────┘  └─────────┘  └─────────┘  └────────────┘ └────────┘  │
+  └────────────────────────────┬────────────────────────────────────────┘
+                               │
+                               ▼
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                 CONTEXT BUILDER (design only — DF-008.1)            │
+  │  Query Analysis → Concept Extraction → Entry Point Selection →     │
+  │  Graph Traversal → Symbol Ranking → Token Budgeting → Assembly     │
+  └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## What's inside?
+**Key Properties:**
+- **Streaming pipeline** — Each stage consumes/produces typed data structures
+- **Zero external dependencies** — Core packages use only Node.js stdlib + TypeScript compiler API
+- **Deterministic** — Same input → identical output (critical for testing/caching)
+- **Incremental ready** — Tree structure preserves paths for future watch-mode
 
-This Turborepo includes the following packages/apps:
+---
 
-### Apps and Packages
+## Quick Start
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+### Prerequisites
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+- Node.js ≥ 18
+- pnpm ≥ 9
 
-### Utilities
+### Installation
 
-This Turborepo has some additional tools already setup for you:
+```bash
+# Clone the repository
+git clone https://github.com/your-org/devforge.git
+cd devforge
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+# Install dependencies
+pnpm install
 
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+# Build all packages
+pnpm build
 ```
 
-Without global `turbo`, use your package manager:
+### Running Tests
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+```bash
+# Run all tests
+pnpm test
+
+# Run tests for a specific package
+pnpm --filter @devforge/symbol-graph test
+pnpm --filter @devforge/repository-indexer test
+pnpm --filter @devforge/knowledge-graph test
+pnpm --filter @devforge/parser-typescript test
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+### Running Benchmarks
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+```bash
+# Run benchmarks (requires fixtures in benchmarks/fixtures/)
+pnpm --filter @devforge/benchmark benchmark
 
-```sh
-turbo build --filter=docs
+# Or run directly
+node packages/benchmark/bin/benchmark.js
 ```
 
-Without global `turbo`:
+---
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+## Building
+
+```bash
+# Build all packages (respects dependency order via Turborepo)
+pnpm build
+
+# Build a specific package
+pnpm --filter @devforge/symbol-graph build
+
+# Type-check without emitting
+pnpm check-types
 ```
 
-### Develop
+The build outputs to `dist/` in each package with:
+- `index.js` — ESM bundle
+- `index.d.ts` — TypeScript declarations
 
-To develop all apps and packages, run the following command:
+---
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Running Tests
 
-```sh
-cd my-turborepo
-turbo dev
+```bash
+# All tests (uses vitest)
+pnpm test
+
+# Watch mode
+pnpm test:watch
+
+# Coverage report
+pnpm test:coverage
+
+# Specific package
+pnpm --filter @devforge/parser-typescript test
 ```
 
-Without global `turbo`, use your package manager:
+Test structure:
+- Unit tests co-located in `__tests__/` or `*.test.ts`
+- Integration tests in `packages/integration-tests/`
+- Benchmarks in `packages/benchmark/`
 
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
+---
+
+## Running Benchmarks
+
+```bash
+# Build benchmark package first
+pnpm --filter @devforge/benchmark build
+
+# Run single benchmark
+pnpm --filter @devforge/benchmark benchmark
+
+# Run multiple iterations with stats
+node packages/benchmark/dist/cli.js --runs 5 --fixture ./benchmarks/fixtures/sample-repo
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Benchmark measures:
+- Indexing time
+- Metadata enrichment time
+- Language detection time
+- TypeScript parsing time
+- Symbol graph construction time
+- Knowledge graph construction time
+- Memory usage (heap)
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+---
 
-```sh
-turbo dev --filter=web
+## Repository Structure
+
+```
+devforge/
+├── apps/
+│   ├── api/              # Backend API (placeholder)
+│   └── web/              # Next.js frontend (placeholder)
+├── benchmarks/
+│   └── fixtures/         # Test repositories for benchmarking
+├── docs/
+│   ├── architecture/     # System architecture documentation
+│   ├── developer/        # Developer guides
+│   └── diagrams/         # Architecture diagrams (ASCII)
+├── packages/
+│   ├── benchmark/        # Pipeline benchmarking harness
+│   ├── config/           # Shared configuration (env, constants)
+│   ├── eslint-config/    # Shared ESLint configurations
+│   ├── integration-tests/# End-to-end pipeline tests
+│   ├── knowledge-graph/  # Architectural knowledge graph builder
+│   ├── logger/           # Structured logging (pino-based)
+│   ├── parser-typescript/# TypeScript AST parser
+│   ├── repository-indexer/# Filesystem scanner + metadata
+│   ├── symbol-graph/     # Cross-file symbol resolution
+│   ├── typescript-config/# Shared TypeScript configurations
+│   └── ui/               # Shared React components
+├── turbo.json            # Turborepo pipeline configuration
+├── package.json          # Root workspace config
+└── pnpm-workspace.yaml   # pnpm workspace definition
 ```
 
-Without global `turbo`:
+---
 
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
+## Package Overview
 
-### Remote Caching
+| Package | Purpose | Public API | Status |
+|---------|---------|------------|--------|
+| `@devforge/repository-indexer` | Filesystem scanning, tree construction, metadata enrichment, language detection | `scanRepository`, `enrichWithMetadata`, `detectLanguage`, `traverseTree`, `collectTree` | ✅ Implemented |
+| `@devforge/parser-typescript` | TypeScript/TSX AST parsing → imports, exports, classes, interfaces, functions, types | `parseTypeScript` | ✅ Implemented |
+| `@devforge/symbol-graph` | Cross-file symbol resolution, typed edges (imports, extends, implements, calls, references) | `buildSymbolGraph`, `createSymbolGraph`, `SymbolGraph`, traversal APIs | ✅ Implemented |
+| `@devforge/knowledge-graph` | Architectural abstraction: modules, services, APIs, repositories, databases | `buildKnowledgeGraph`, `getNode`, `getDependencies`, `findServicesUsingRepository`, query APIs | ✅ Implemented |
+| `@devforge/config` | Environment validation (zod), shared constants | `env`, `DEFAULT_HOST`, `DEFAULT_PORT`, `APP_NAME`, `APP_VERSION` | ✅ Implemented |
+| `@devforge/logger` | Pino-based structured logger with pretty dev output | `logger` | ✅ Implemented |
+| `@devforge/benchmark` | Pipeline benchmarking CLI + runner | `runBenchmark`, `formatResult`, `calculateMedian`, `calculateStats` | ✅ Implemented |
+| `@devforge/integration-tests` | End-to-end pipeline verification | `runPipeline`, `serializePipelineResult` | ✅ Implemented |
+| `@repo/eslint-config` | Shared ESLint configs (base, next-js, react-internal) | Config exports | ✅ Implemented |
+| `@repo/typescript-config` | Shared TypeScript configs | Config exports | ✅ Implemented |
+| `@repo/ui` | Shared React components (Button, Card, Code) | Component exports | ✅ Implemented |
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+---
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+## Roadmap
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+### Completed (v0.1)
+- [x] Repository indexer with metadata enrichment
+- [x] Language detection (30+ languages)
+- [x] TypeScript parser (imports, exports, classes, interfaces, functions, types)
+- [x] Symbol graph with typed edges
+- [x] Knowledge graph with architectural node kinds
+- [x] Query APIs for knowledge graph
+- [x] Benchmarking harness
+- [x] Integration test pipeline
+- [x] Shared config, logger, TypeScript/ESLint configs
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+### In Progress (v0.2)
+- [ ] Context Builder implementation (DF-008.1)
+  - Query analysis
+  - Concept extraction
+  - Entry point selection
+  - Graph traversal (weighted BFS)
+  - Symbol ranking
+  - Token budgeting
+  - Context assembly
+- [ ] Incremental indexing (file watcher + diff)
+- [ ] Cross-language support (Python, Go, Rust parsers)
 
-```sh
-cd my-turborepo
-turbo login
-```
+### Planned (v0.3+)
+- [ ] Execution Engine (DF-009.2) — Tool registry, DAG scheduler, side-effect tracking, replay
+- [ ] Language Server Protocol (LSP) integration for precise cross-references
+- [ ] Vector embeddings for semantic concept extraction
+- [ ] Web UI for graph visualization
+- [ ] GitHub Action for CI integration
+- [ ] Plugin system for custom node/edge kinds
 
-Without global `turbo`, use your package manager:
+---
 
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
+## Contributing
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+See [docs/developer/getting-started.md](docs/developer/getting-started.md) for development setup, coding standards, and contribution guidelines.
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+---
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+## License
 
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+MIT

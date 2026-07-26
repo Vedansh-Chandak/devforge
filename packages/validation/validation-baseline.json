@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-07-26T12:35:44.741Z",
+  "repository": "/Users/vedanshchandak/Desktop/devforge",
+  "summary": {
+    "totalQuestions": 15,
+    "intentCorrect": 15,
+    "retrievalMatched": 12,
+    "contextMatched": 15,
+    "promptMatched": 13,
+    "pipelineSuccess": 15
+  },
+  "caseIntents": {
+    "explain-symbol-graph": "ExplainCode",
+    "explain-repository-indexing": "ExplainCode",
+    "explain-brain-runtime": "ExplainCode",
+    "find-devforge-runtime": "FindSymbol",
+    "find-devforge-brain": "FindSymbol",
+    "find-build-knowledge-graph": "FindSymbol",
+    "deps-devforge-brain": "FindDependencies",
+    "deps-what-depends-on-runtime": "FindDependencies",
+    "deps-build-symbol-graph": "FindDependencies",
+    "arch-show": "Architecture",
+    "arch-describe": "Architecture",
+    "search-knowledge-graph": "Search",
+    "search-model-provider": "Search",
+    "search-prompt-composer": "Search",
+    "search-repository-indexer": "Search"
+  },
+  "caseRetrievalSymbols": {
+    "explain-symbol-graph": [],
+    "explain-repository-indexing": [],
+    "explain-brain-runtime": [],
+    "find-devforge-runtime": [],
+    "find-devforge-brain": [],
+    "find-build-knowledge-graph": [],
+    "deps-devforge-brain": [],
+    "deps-what-depends-on-runtime": [],
+    "deps-build-symbol-graph": [],
+    "arch-show": [],
+    "arch-describe": [],
+    "search-knowledge-graph": [],
+    "search-model-provider": [],
+    "search-prompt-composer": [],
+    "search-repository-indexer": []
+  },
+  "caseContextSymbols": {
+    "explain-symbol-graph": [],
+    "explain-repository-indexing": [],
+    "explain-brain-runtime": [],
+    "find-devforge-runtime": [
+      "DevForgeRuntime"
+    ],
+    "find-devforge-brain": [
+      "DevForgeBrain"
+    ],
+    "find-build-knowledge-graph": [],
+    "deps-devforge-brain": [],
+    "deps-what-depends-on-runtime": [
+      "DevForgeRuntime"
+    ],
+    "deps-build-symbol-graph": [],
+    "arch-show": [],
+    "arch-describe": [],
+    "search-knowledge-graph": [],
+    "search-model-provider": [],
+    "search-prompt-composer": [],
+    "search-repository-indexer": []
+  }
+}

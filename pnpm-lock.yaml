@@ -117,8 +117,76 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.15.3)
 
+  packages/brain:
+    dependencies:
+      '@devforge/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@devforge/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
+      '@devforge/prompt-composer':
+        specifier: workspace:*
+        version: link:../prompt-composer
+      '@devforge/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@devforge/tools':
+        specifier: workspace:*
+        version: link:../tools
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
   packages/config:
     dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
+  packages/core:
+    dependencies:
+      '@devforge/brain':
+        specifier: workspace:*
+        version: link:../brain
+      '@devforge/config':
+        specifier: workspace:*
+        version: link:../config
+      '@devforge/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@devforge/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
+      '@devforge/prompt-composer':
+        specifier: workspace:*
+        version: link:../prompt-composer
+      '@devforge/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -235,6 +303,21 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.15.3)
 
+  packages/model-provider:
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
   packages/parser-typescript:
     dependencies:
       typescript:
@@ -254,7 +337,60 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.15.3)
 
+  packages/prompt-composer:
+    dependencies:
+      '@devforge/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
   packages/repository-indexer:
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
+  packages/runtime:
+    dependencies:
+      '@devforge/config':
+        specifier: workspace:*
+        version: link:../config
+      '@devforge/knowledge-graph':
+        specifier: workspace:*
+        version: link:../knowledge-graph
+      '@devforge/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@devforge/parser-typescript':
+        specifier: workspace:*
+        version: link:../parser-typescript
+      '@devforge/repository-indexer':
+        specifier: workspace:*
+        version: link:../repository-indexer
+      '@devforge/symbol-graph':
+        specifier: workspace:*
+        version: link:../symbol-graph
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:*
@@ -280,6 +416,28 @@ importers:
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
+  packages/tools:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@devforge/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
       typescript:
         specifier: 5.9.2
         version: 5.9.2
@@ -319,6 +477,37 @@ importers:
       typescript:
         specifier: 5.9.2
         version: 5.9.2
+
+  packages/validation:
+    dependencies:
+      '@devforge/brain':
+        specifier: workspace:*
+        version: link:../brain
+      '@devforge/core':
+        specifier: workspace:*
+        version: link:../core
+      '@devforge/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@devforge/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
+      '@devforge/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
 
 packages:
 

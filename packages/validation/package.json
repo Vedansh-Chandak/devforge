@@ -1,0 +1,22 @@
+{
+  "name": "@devforge/validation",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "validate": "node --loader ts-node/esm src/cli.ts"
+  },
+  "dependencies": {
+    "@devforge/core": "workspace:*",
+    "@devforge/model-provider": "workspace:*",
+    "@devforge/brain": "workspace:*",
+    "@devforge/runtime": "workspace:*",
+    "@devforge/logger": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "typescript": "5.9.2",
+    "vitest": "^2.0.0"
+  }
+}
