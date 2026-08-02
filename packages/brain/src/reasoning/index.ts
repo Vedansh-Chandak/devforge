@@ -1,9 +1,9 @@
 /**
- * DF-011.5 Phase 1 — bounded reasoning building blocks.
+ * DF-011.5 — bounded reasoning building blocks and the reasoning loop.
  *
- * This module barrel re-exports the pure reasoning infrastructure used by
- * the brain. Phase 1 does not touch the brain itself; it only provides
- * the deterministic primitives a future reasoning loop will consume.
+ * Phase 1 provides the deterministic primitives (limits, fingerprint,
+ * state, evidence, progress). Phase 2 adds the ReasoningLoop that
+ * consumes them and is orchestrated by the brain.
  */
 
 export * from './limits.js';
@@ -11,3 +11,4 @@ export * from './fingerprint.js';
 export * from './state.js';
 export * from './evidence.js';
 export * from './progress.js';
+export * from './loop.js';

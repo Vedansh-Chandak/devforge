@@ -1,15 +1,8 @@
 import { logger } from '@devforge/logger';
 import { PromptComposer } from '@devforge/prompt-composer';
 import type { ComposerContext } from '@devforge/prompt-composer';
-import { isModelProviderError } from '@devforge/model-provider';
-import type { ToolRegistry, ToolExecutionContext, ToolPermission } from '@devforge/tools';
-import {
-  parseToolCallProposals,
-  validateToolCallProposals,
-  authorizeModelToolCall,
-  executeModelToolCalls,
-} from '@devforge/tools';
-import type { ToolCallProposal } from '@devforge/tools';
+import type { ToolRegistry, ToolExecutionContext } from '@devforge/tools';
+import { ReasoningLoop } from './reasoning/index.js';
 import { classifyIntent } from './intent.js';
 import { buildContextFromMetadata } from './context-builder.js';
 import type {
@@ -24,7 +17,6 @@ import type {
   BrainToolCallResult,
   RuntimeInterface,
   ModelProviderInterface,
-  IntentKind,
   BrainToolExecutionConfig,
 } from './types.js';
 
@@ -33,7 +25,9 @@ import type {
  *
  * Pipeline: Question → Validation → Intent → Runtime → Context → Composer → Provider → Answer
  *
- * Extended Pipeline (DF-011.3): ... → Provider → Tool Proposals → Validation → Authorization → Execution → ToolResult → STOP
+ * Extended Pipeline (DF-011.5 Phase 2): ... → Composer → ReasoningLoop (bounded
+ * multi-round: generate → parse → validate → authorize → execute → evidence →
+ * progress → limits) → AskResult.
  *
  * Dependencies injected via constructor:
  *   Brain → Runtime, PromptComposer, ModelProvider, ToolRegistry (optional)
@@ -84,17 +78,19 @@ export class DevForgeBrain {
   }
 
   /**
-   * Full AI pipeline: classify intent → query runtime → compose prompt → call provider.
+   * Full AI pipeline: classify intent → query runtime → compose prompt →
+   * run the bounded reasoning loop (DF-011.5 Phase 2).
    *
-   * Extended (DF-011.3): If tool execution is enabled and the model response contains
-   * tool calls, Brain will parse, validate, authorize, and execute them before returning.
-   * After tool execution, Brain STOPs — no second model call is made.
+   * The ReasoningLoop owns all multi-round orchestration: model generation,
+   * tool proposal parsing, validation, authorization, execution, evidence
+   * accumulation, no-progress detection, and every limit check. Brain only
+   * composes the initial prompt and maps the loop result to an AskResult.
    *
    * - Returns 'invalid' for empty/whitespace-only input.
    * - Returns 'classified' for Unknown intent (provider NOT called).
    * - Returns 'classified' when no provider is configured.
-   * - Returns 'answered' on successful provider response (no tool calls).
-   * - Returns 'tool_executed' after controlled tool execution.
+   * - Returns 'answered' when the model produced a final text answer.
+   * - Returns 'tool_executed' after bounded tool execution.
    * - Returns 'provider_error' on provider failure.
    */
   async ask(question: string): Promise<AskResult> {
@@ -182,199 +178,83 @@ export class DevForgeBrain {
       return result;
     }
 
-    // --- Provider call ---
+    // --- Provider call + bounded reasoning loop (DF-011.5 Phase 2) ---
+    const provider = this.provider;
     const providerStart = Date.now();
-    let response;
-    try {
-      response = await this.provider.generate(composeResult.request);
-    } catch (error: unknown) {
-      if (isModelProviderError(error)) {
-        const result: BrainProviderError = {
-          question: trimmed,
-          intent: intent.intent,
-          status: 'provider_error',
-          error: error.message,
-          errorCode: error.code,
-          retryable: error.retryable,
-        };
-        return result;
-      }
+    const toolEnabled =
+      this.toolExecutionConfig?.enabled === true &&
+      this.toolRegistry !== undefined &&
+      this.executionContextProvider !== undefined;
 
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const result: BrainProviderError = {
-        question: trimmed,
-        intent: intent.intent,
-        status: 'provider_error',
-        error: errorMessage,
-      };
-      return result;
-    }
+    const loopResult = await new ReasoningLoop().execute({
+      messages: composeResult.request.messages,
+      generate: (messages) => provider.generate({ ...composeResult.request, messages: [...messages] }),
+      toolExecution: toolEnabled
+        ? {
+            registry: this.toolRegistry as ToolRegistry,
+            executionContextProvider: this.executionContextProvider as () => ToolExecutionContext,
+            maxExecutions: this.toolExecutionConfig?.maxExecutions,
+          }
+        : undefined,
+    });
     const providerDuration = Date.now() - providerStart;
 
-    if (!response.content) {
+    if (loopResult.status === 'provider_error') {
       const result: BrainProviderError = {
         question: trimmed,
         intent: intent.intent,
         status: 'provider_error',
-        error: 'Provider returned empty response content',
+        error: loopResult.providerError?.message ?? 'Provider failed',
+        errorCode: loopResult.providerError?.code,
+        retryable: loopResult.providerError?.retryable,
       };
       return result;
     }
 
-    // --- DF-011.3: Check for tool calls in provider response ---
-    if (this.toolExecutionConfig?.enabled && this.toolRegistry && this.executionContextProvider) {
-      const proposals = parseToolCallProposals(response.content);
-
-      if (proposals.length > 0) {
-        return await this.executeToolProposals(
-          trimmed,
-          intent.intent,
-          proposals,
-          composeResult.truncated,
+    if (loopResult.status === 'answered') {
+      const duration = Date.now() - startTime;
+      const result: BrainAnswer = {
+        question: trimmed,
+        intent: intent.intent,
+        status: 'answered',
+        answer: loopResult.finalAnswer ?? '',
+        model: {
+          provider: provider.id,
+          model: loopResult.model?.model,
+          finishReason: loopResult.model?.finishReason,
+          usage: loopResult.model?.usage,
+        },
+        metadata: {
+          contextTruncated: composeResult.truncated,
+          duration,
           runtimeDuration,
           providerDuration,
-          startTime,
-        );
-      }
+        },
+      };
+      return result;
     }
 
-    // --- No tool calls: return normal answer ---
+    // --- tool_executed: the bounded loop ran tools then stopped on a bound ---
     const duration = Date.now() - startTime;
-    const result: BrainAnswer = {
+    const toolCalls = [...loopResult.toolCalls] as BrainToolCallResult[];
+    const successfulCalls = toolCalls.filter((r) => r.status === 'completed').length;
+    const result: BrainToolExecuted = {
       question: trimmed,
       intent: intent.intent,
-      status: 'answered',
-      answer: response.content,
-      model: {
-        provider: this.provider.id,
-        model: response.model,
-        finishReason: response.finishReason,
-        usage: response.usage,
-      },
+      status: 'tool_executed',
+      toolCalls,
       metadata: {
         contextTruncated: composeResult.truncated,
         duration,
         runtimeDuration,
         providerDuration,
+        toolExecutionDuration: providerDuration,
+        totalToolCalls: toolCalls.length,
+        successfulCalls,
+        failedCalls: toolCalls.length - successfulCalls,
       },
     };
     return result;
-  }
-
-  /**
-   * Execute tool proposals through the controlled pipeline:
-   *   proposals → validate → authorize → execute → STOP
-   *
-   * No second model call is made. ToolResult is NOT sent back to the model.
-   */
-  private async executeToolProposals(
-    question: string,
-    intent: IntentKind,
-    proposals: ToolCallProposal[],
-    contextTruncated: boolean,
-    runtimeDuration: number,
-    providerDuration: number,
-    startTime: number,
-  ): Promise<BrainToolExecuted> {
-    const toolExecStart = Date.now();
-
-    // 1. Validate all proposals
-    const validationResults = validateToolCallProposals(proposals, this.toolRegistry!);
-
-    // 2. Authorize validated calls (defense-in-depth)
-    const executionContext = this.executionContextProvider!();
-    const authorizedCalls: Array<import('@devforge/tools').AuthorizedToolCall> = [];
-    const deniedResults: BrainToolCallResult[] = [];
-
-    for (let i = 0; i < validationResults.length; i++) {
-      const vr = validationResults[i]!;
-      if (!vr.valid || !vr.validatedCall) {
-        const proposal = proposals[i];
-        if (proposal) {
-          deniedResults.push({
-            callId: proposal.callId,
-            toolId: proposal.toolIdRaw,
-            status: 'denied',
-            error: vr.error ?? { code: 'VALIDATION_FAILED', message: 'Validation failed' },
-          });
-        }
-        continue;
-      }
-
-      const authResult = authorizeModelToolCall(vr.validatedCall, executionContext, this.toolRegistry!);
-      if (!authResult.authorized || !authResult.authorizedCall) {
-        deniedResults.push({
-          callId: vr.validatedCall.callId,
-          toolId: vr.validatedCall.toolId,
-          status: 'denied',
-          error: {
-            code: authResult.auditRecord.errorCode ?? 'UNAUTHORIZED',
-            message: authResult.denialReason ?? 'Authorization denied',
-          },
-        });
-        continue;
-      }
-
-      authorizedCalls.push(authResult.authorizedCall);
-    }
-
-    // 3. Execute authorized calls
-    const executionResult = await executeModelToolCalls(
-      authorizedCalls,
-      executionContext,
-      this.toolRegistry!,
-      { maxExecutions: this.toolExecutionConfig!.maxExecutions },
-    );
-
-    // 4. Combine denied + executed results in proposal order
-    const allResults: BrainToolCallResult[] = [];
-    for (let i = 0; i < proposals.length; i++) {
-      const proposal = proposals[i];
-      if (!proposal) continue;
-
-      // Check if this was denied during validation/authorization
-      const denied = deniedResults.find(d => d.callId === proposal.callId);
-      if (denied) {
-        allResults.push(denied);
-        continue;
-      }
-
-      // Check if this was in the execution results
-      const executed = executionResult.results.find(
-        (r: import('@devforge/tools').ModelToolCallResult) => r.callId === proposal.callId,
-      );
-      if (executed) {
-        allResults.push(executed);
-        continue;
-      }
-    }
-
-    const toolExecDuration = Date.now() - toolExecStart;
-    const totalDuration = Date.now() - startTime;
-    const successfulCalls = allResults.filter((r: BrainToolCallResult) => r.status === 'completed').length;
-    const failedCalls = allResults.filter((r: BrainToolCallResult) => r.status !== 'completed').length;
-
-    logger.info(
-      `Tool execution completed: ${successfulCalls}/${allResults.length} successful ` +
-      `(${toolExecDuration}ms)`,
-    );
-
-    return {
-      question,
-      intent,
-      status: 'tool_executed',
-      toolCalls: allResults,
-      metadata: {
-        contextTruncated,
-        duration: totalDuration,
-        runtimeDuration,
-        providerDuration,
-        toolExecutionDuration: toolExecDuration,
-        totalToolCalls: allResults.length,
-        successfulCalls,
-        failedCalls,
-      },
-    };
   }
 
   /**
