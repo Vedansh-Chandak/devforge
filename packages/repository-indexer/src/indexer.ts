@@ -72,10 +72,7 @@ function classifyRootError(
 }
 
 function compareLexicographic(a: string, b: string): number {
-  return a.localeCompare(b, undefined, {
-    numeric: false,
-    sensitivity: "variant",
-  });
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 async function readDirectorySorted(absoluteDir: string): Promise<string[]> {
@@ -114,11 +111,11 @@ async function walk(
     return null;
   }
 
+  const name = pathBasename(absolutePath);
+
   if (stat.isSymbolicLink()) {
     return null;
   }
-
-  const name = pathBasename(absolutePath);
   const relativePath = relativePosix(absoluteRoot, absolutePath);
 
   if (defaultIgnoreEngine.shouldIgnore(relativePath, stat.isDirectory())) {
