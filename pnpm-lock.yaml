@@ -240,6 +240,25 @@ importers:
         specifier: ^8.50.0
         version: 8.50.0(eslint@9.39.1)(typescript@5.9.2)
 
+  packages/execution:
+    dependencies:
+      '@devforge/planner':
+        specifier: workspace:*
+        version: link:../planner
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
   packages/integration-tests:
     dependencies:
       '@devforge/knowledge-graph':
@@ -333,6 +352,28 @@ importers:
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
+  packages/planner:
+    dependencies:
+      '@devforge/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
+      '@devforge/prompt-composer':
+        specifier: workspace:*
+        version: link:../prompt-composer
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
       vitest:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.15.3)
