@@ -242,6 +242,9 @@ importers:
 
   packages/execution:
     dependencies:
+      '@devforge/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
       '@devforge/planner':
         specifier: workspace:*
         version: link:../planner
