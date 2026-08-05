@@ -227,6 +227,29 @@ export type {
   ExecutorErrorOptions,
 } from './executor/index.js';
 
+// Autonomous Coding (DF-016B)
+export {
+  DefaultPatchEngine,
+  createPatchEngine,
+  fixedPatchEngine,
+  failingPatchEngine,
+  countingPatchEngine,
+  AutonomousCodingEngine,
+  createCodingEngine,
+} from './executor/index.js';
+export type {
+  CodePatch,
+  CodePatchOperation,
+  PatchEngine,
+  PatchEngineConfig,
+  PatchEngineValidationConfig,
+  PatchGenerationRequest,
+  PatchGenerationResult,
+  CodingReport,
+  CodingEngineConfig,
+  CodingBudgets,
+} from './executor/index.js';
+
 // Model Integration (DF-016C)
 export {
   ProviderCodingModel,

@@ -114,6 +114,7 @@ export class DevForgeBrain {
       const result: AskClassifiedResult = {
         question: trimmed,
         intent: intent.intent,
+        confidence: intent.confidence,
         status: 'classified',
         timestamp: new Date().toISOString(),
         runtimeReady: this.state.initialized,
@@ -127,6 +128,7 @@ export class DevForgeBrain {
       const result: AskClassifiedResult = {
         question: trimmed,
         intent: intent.intent,
+        confidence: intent.confidence,
         status: 'classified',
         timestamp: new Date().toISOString(),
         runtimeReady: this.state.initialized,
@@ -171,6 +173,7 @@ export class DevForgeBrain {
       const result: AskClassifiedResult = {
         question: trimmed,
         intent: intent.intent,
+        confidence: intent.confidence,
         status: 'classified',
         timestamp: new Date().toISOString(),
         runtimeReady: this.state.initialized,

@@ -75,6 +75,7 @@ export interface ClassifyIntentResult {
 export interface AskClassifiedResult {
   question: string;
   intent: IntentKind;
+  confidence: number;
   status: 'classified';
   timestamp: string;
   runtimeReady: boolean;

@@ -786,6 +786,7 @@ describe('pipeline', () => {
       const mockResult: AskResult = {
         question: 'Explain auth',
         intent: 'ExplainCode',
+        confidence: 0.9,
         status: 'classified',
         timestamp: new Date().toISOString(),
         runtimeReady: false,

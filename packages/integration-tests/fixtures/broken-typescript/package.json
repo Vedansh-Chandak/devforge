@@ -1,0 +1,14 @@
+{
+  "name": "broken-typescript",
+  "version": "1.0.0",
+  "description": "Fixture with TypeScript errors",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
