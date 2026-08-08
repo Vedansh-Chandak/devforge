@@ -250,6 +250,51 @@ export type {
   CodingBudgets,
 } from './executor/index.js';
 
+// Autonomous agent integration exports (DF-019): surface the DF-016B/016C
+// primitives the agent orchestrator and repair loop compose. Additive only.
+export {
+  hashText,
+  hashTextSHA256,
+  CODING_BUDGETS,
+  defaultPatchValidationConfig,
+  validatePatchStructureBatch,
+  validatePatchesWorkspace,
+  validatePatchesFull,
+  scriptedCodingModel,
+  fixedCodingModel,
+  failingCodingModel,
+  cancellingCodingModel,
+  customCodingModel,
+  scriptedReasoningModel,
+  fixedReasoningModel,
+  failingReasoningModel,
+  cancellingReasoningModel,
+  customReasoningModel,
+  defaultAnalysis,
+  defaultDecision,
+  captureDiagnostics,
+  captureCommandDiagnostics,
+} from './executor/index.js';
+export type {
+  NormalizedPatch,
+  PatchValidationConfig,
+  PatchStructureValidationResult,
+  CodingModel,
+  CodingModelRequest,
+  ScriptedCodingModel,
+  ReasoningModel,
+  FailureAnalysis,
+  RepairDecision,
+  FailureAnalysisInput,
+  RepairDecisionInput,
+  ScriptedReasoningModel,
+  Diagnostics,
+  Diagnostic,
+  DiagnosticCategory,
+  DiagnosticSeverity,
+  DiagnosticsConfig,
+} from './executor/index.js';
+
 // Model Integration (DF-016C)
 export {
   ProviderCodingModel,

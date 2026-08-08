@@ -12,6 +12,7 @@ export {
   getNodesByFile,
   hasNode,
   hasEdge,
+  symbolIdToKey,
   serializeSymbolGraph,
   deserializeSymbolGraph,
 } from "./graph.js";

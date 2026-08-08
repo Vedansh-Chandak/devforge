@@ -402,6 +402,26 @@ export function parseTypeScript(code: string, fileName = "input.ts"): ParseResul
     syntaxErrors: collectSyntaxErrors(sourceFile),
   };
 
+  function recordExportedDeclaration(
+    node: ts.Node,
+    name: string | undefined,
+    start: number,
+    end: number
+  ): void {
+    if (!name) return;
+    const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+    const hasExport = modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+    if (!hasExport) return;
+    result.exports.push({
+      moduleSpecifier: undefined,
+      namedExports: [{ name, alias: undefined, isTypeOnly: false }],
+      exportClause: undefined,
+      isTypeOnly: false,
+      start,
+      end,
+    });
+  }
+
   function visit(node: ts.Node) {
     switch (node.kind) {
       case ts.SyntaxKind.ImportDeclaration:
@@ -410,21 +430,36 @@ export function parseTypeScript(code: string, fileName = "input.ts"): ParseResul
       case ts.SyntaxKind.ExportDeclaration:
         result.exports.push(parseExportDeclaration(node as ts.ExportDeclaration, sourceFile));
         break;
-      case ts.SyntaxKind.ClassDeclaration:
-        result.classes.push(parseClassDeclaration(node as ts.ClassDeclaration, sourceFile));
+      case ts.SyntaxKind.ClassDeclaration: {
+        const declaration = parseClassDeclaration(node as ts.ClassDeclaration, sourceFile);
+        result.classes.push(declaration);
+        recordExportedDeclaration(node, declaration.name, declaration.start, declaration.end);
         break;
-      case ts.SyntaxKind.InterfaceDeclaration:
-        result.interfaces.push(parseInterfaceDeclaration(node as ts.InterfaceDeclaration, sourceFile));
+      }
+      case ts.SyntaxKind.InterfaceDeclaration: {
+        const declaration = parseInterfaceDeclaration(node as ts.InterfaceDeclaration, sourceFile);
+        result.interfaces.push(declaration);
+        recordExportedDeclaration(node, declaration.name, declaration.start, declaration.end);
         break;
-      case ts.SyntaxKind.EnumDeclaration:
-        result.enums.push(parseEnumDeclaration(node as ts.EnumDeclaration, sourceFile));
+      }
+      case ts.SyntaxKind.EnumDeclaration: {
+        const declaration = parseEnumDeclaration(node as ts.EnumDeclaration, sourceFile);
+        result.enums.push(declaration);
+        recordExportedDeclaration(node, declaration.name, declaration.start, declaration.end);
         break;
-      case ts.SyntaxKind.FunctionDeclaration:
-        result.functions.push(parseFunctionDeclaration(node as ts.FunctionDeclaration, sourceFile));
+      }
+      case ts.SyntaxKind.FunctionDeclaration: {
+        const declaration = parseFunctionDeclaration(node as ts.FunctionDeclaration, sourceFile);
+        result.functions.push(declaration);
+        recordExportedDeclaration(node, declaration.name, declaration.start, declaration.end);
         break;
-      case ts.SyntaxKind.TypeAliasDeclaration:
-        result.typeAliases.push(parseTypeAliasDeclaration(node as ts.TypeAliasDeclaration, sourceFile));
+      }
+      case ts.SyntaxKind.TypeAliasDeclaration: {
+        const declaration = parseTypeAliasDeclaration(node as ts.TypeAliasDeclaration, sourceFile);
+        result.typeAliases.push(declaration);
+        recordExportedDeclaration(node, declaration.name, declaration.start, declaration.end);
         break;
+      }
     }
     ts.forEachChild(node, visit);
   }

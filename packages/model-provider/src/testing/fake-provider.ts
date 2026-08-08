@@ -1,4 +1,4 @@
-mimport { BaseModelProvider } from '../provider.js';
+import { BaseModelProvider } from '../provider.js';
 import type { ModelRequest, ModelResponse } from '../types.js';
 import { ModelProviderError } from '../errors.js';
 

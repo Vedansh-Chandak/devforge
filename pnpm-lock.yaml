@@ -135,6 +135,28 @@ importers:
         specifier: 5.9.2
         version: 5.9.2
 
+  packages/autonomous:
+    dependencies:
+      '@devforge/execution':
+        specifier: workspace:*
+        version: link:../execution
+      '@devforge/planner':
+        specifier: workspace:*
+        version: link:../planner
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
   packages/benchmark:
     dependencies:
       '@devforge/knowledge-graph':
@@ -199,6 +221,34 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.15.3)
+
+  packages/context-engine:
+    dependencies:
+      '@devforge/knowledge-graph':
+        specifier: workspace:*
+        version: link:../knowledge-graph
+      '@devforge/parser-typescript':
+        specifier: workspace:*
+        version: link:../parser-typescript
+      '@devforge/repository-indexer':
+        specifier: workspace:*
+        version: link:../repository-indexer
+      '@devforge/symbol-graph':
+        specifier: workspace:*
+        version: link:../symbol-graph
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:*
