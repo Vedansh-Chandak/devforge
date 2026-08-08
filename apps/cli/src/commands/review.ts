@@ -5,7 +5,7 @@
  * Includes: bugs, style, security, performance, missing tests
  */
 
-import type { CliContext } from '../routing/context.js';
+import type { ExecutionContext } from '../services/session.js';
 import type { CodePatch, GitDiff } from '@devforge/execution';
 
 /** Review finding categories */
@@ -28,7 +28,7 @@ interface ReviewReport {
 }
 
 /** Handler for `devforge review`. */
-export async function handleReview(ctx: CliContext): Promise<string> {
+export async function handleReview(ctx: ExecutionContext): Promise<string> {
   const { services, repository, options } = ctx;
   const { executor } = services;
 

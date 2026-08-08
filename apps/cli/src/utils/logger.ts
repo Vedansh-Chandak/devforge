@@ -5,7 +5,7 @@
  * output on stdout stays clean for --json.
  */
 
-import type { LogLevel } from '../config/config.js';
+import type { LogLevel } from '../types.js';
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
   trace: 10,

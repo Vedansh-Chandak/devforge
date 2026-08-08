@@ -3,11 +3,11 @@
  *
  * Print workspace, provider, selected model, repository, branch, engine version.
  */
-import type { CliContext } from '../routing/context.js';
-import { renderStatus } from '../utils/output.js';
+import type { LightCliContext } from '../services/session.js';
+import { renderStatus } from '../services/output.js';
 
 /** Handler for `devforge status`. */
-export async function handleStatus(ctx: CliContext): Promise<string> {
+export async function handleStatus(ctx: LightCliContext): Promise<string> {
   const { config, repository, services, options } = ctx;
 
   const lines: readonly [string, string][] = [

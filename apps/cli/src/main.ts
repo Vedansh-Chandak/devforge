@@ -5,7 +5,7 @@
  * Runs the bootstrap and sets the process exit code.
  */
 
-import { run } from './bootstrap.js';
+import { run } from './services/orchestrator.js';
 
 run()
   .then((code) => {

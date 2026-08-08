@@ -5,17 +5,18 @@
  * integration testing.
  */
 
-export { run } from './bootstrap.js';
+export { run, createProgram } from './services/orchestrator.js';
+export type { CommandHandler } from './services/orchestrator.js';
+export { createLightContext, createExecutionContext } from './services/session.js';
+export type { LightCliContext, ExecutionContext, CommandSessionContext } from './services/session.js';
 
-// Router
-export { createProgram } from './routing/router.js';
-export type { CommandHandler } from './routing/router.js';
-export { buildContext } from './routing/context.js';
-export type { CliContext, CliOptions } from './routing/context.js';
+// Types
+export type { DevForgeConfig, RawDevForgeConfig, ProviderKind, LogLevel, CliOptions } from './types.js';
+export { DEFAULT_CONFIG, DEFAULT_TEMPERATURE, DEFAULT_MAX_TOKENS } from './types.js';
 
-// Config
-export type { DevForgeConfig, RawDevForgeConfig, ProviderKind, LogLevel } from './config/index.js';
-export { validateConfig, loadConfig, DEFAULT_CONFIG, DEFAULT_TEMPERATURE } from './config/index.js';
+// Config loader
+export { validateConfig, loadConfig, loadFromEnv, loadJsonFile, userConfigPath, isProviderKind } from './services/config-loader.js';
+export type { ConfigValidationResult } from './services/config-loader.js';
 
 // Services
 export {
@@ -45,11 +46,15 @@ export {
   handleRun,
   handleStatus,
   handleDoctor,
+  handleConfig,
   runHealthChecks,
 } from './commands/index.js';
 
-// Utils
-export { CliError, ConfigError, formatError } from './utils/errors.js';
-export type { CliErrorCode } from './utils/errors.js';
+// Errors
+export { CliError, ConfigError, formatError } from './errors.js';
+export type { CliErrorCode } from './errors.js';
+
+// Output / progress
 export { Logger, logger } from './utils/logger.js';
-export { renderPlan, renderCodingReport, renderExecutionReport, renderStatus, color } from './utils/output.js';
+export { renderPlan, renderCodingReport, renderExecutionReport, renderStatus, color } from './services/output.js';
+export { Spinner, withSpinner } from './services/progress.js';

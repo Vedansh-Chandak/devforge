@@ -1,8 +1,7 @@
 /**
- * @devforge/cli — Configuration types and defaults (M1).
+ * @devforge/cli — Shared type definitions (M1).
  *
- * Defines the DevForge CLI configuration schema and the default values used
- * when no config file or environment overrides are present.
+ * Configuration schema plus the CLI/session option types used across commands.
  */
 
 /** Supported model provider kinds. */
@@ -57,3 +56,13 @@ export const DEFAULT_TEMPERATURE = 0.2;
 
 /** Default max tokens applied to model requests. */
 export const DEFAULT_MAX_TOKENS = 2048;
+
+/** CLI global options. */
+export interface CliOptions {
+  /** Output as JSON instead of human-readable text. */
+  json: boolean;
+  /** Enable debug logging and stack traces. */
+  debug: boolean;
+  /** Auto-approve confirmation steps for autonomous execution. */
+  autoApprove: boolean;
+}

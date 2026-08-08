@@ -10,4 +10,5 @@ export { handlePlan } from './plan.js';
 export { handleRun } from './run.js';
 export { handleStatus } from './status.js';
 export { handleDoctor, runHealthChecks } from './doctor.js';
+export { handleConfig } from './config.js';
 export type { HealthCheck } from './doctor.js';

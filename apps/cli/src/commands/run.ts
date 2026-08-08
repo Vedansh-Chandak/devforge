@@ -4,12 +4,12 @@
  * Planner → Executor (generate plan, then execute it).
  */
 
-import type { CliContext } from '../routing/context.js';
-import { renderExecutionReport } from '../utils/output.js';
+import type { ExecutionContext } from '../services/session.js';
+import { renderExecutionReport } from '../services/output.js';
 import type { ExecutionReport } from '@devforge/execution';
 
 /** Handler for `devforge run <goal>`. */
-export async function handleRun(ctx: CliContext, goal: string): Promise<string | object> {
+export async function handleRun(ctx: ExecutionContext, goal: string): Promise<string | object> {
   const { services, options } = ctx;
   const { planner, executor } = services;
   const startTime = Date.now();

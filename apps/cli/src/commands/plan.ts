@@ -1,15 +1,15 @@
-d/**
+/**
  * @devforge/cli — plan command (M2).
  *
  * Brain → Planner → Print ExecutionPlan
  * Do not execute.
  */
 
-import type { CliContext } from '../routing/context.js';
-import { renderPlanResult } from '../utils/output.js';
+import type { ExecutionContext } from '../services/session.js';
+import { renderPlanResult } from '../services/output.js';
 
 /** Handler for `devforge plan <goal>`. */
-export async function handlePlan(ctx: CliContext, goal: string): Promise<string> {
+export async function handlePlan(ctx: ExecutionContext, goal: string): Promise<string> {
   const { services, options, repository } = ctx;
   const { brain, planner } = services;
 

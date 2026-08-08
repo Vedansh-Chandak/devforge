@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { validateConfig, DEFAULT_CONFIG, DEFAULT_TEMPERATURE } from '../config/index.js';
-import { loadConfig } from '../config/loader.js';
-import { renderPlan, renderStatus, renderPlanResult, renderCodingReport } from '../utils/output.js';
+import { DEFAULT_CONFIG, DEFAULT_TEMPERATURE } from '../types.js';
+import { validateConfig, loadConfig } from '../services/config-loader.js';
+import { renderPlan, renderStatus, renderPlanResult, renderCodingReport } from '../services/output.js';
 import type { ExecutionPlan } from '@devforge/planner';
 
 describe('validateConfig', () => {

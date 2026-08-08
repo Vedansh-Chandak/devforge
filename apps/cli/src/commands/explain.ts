@@ -5,7 +5,7 @@
  * No planner. No executor.
  */
 
-import type { CliContext } from '../routing/context.js';
+import type { ExecutionContext } from '../services/session.js';
 import { DevForgeRuntime } from '@devforge/runtime';
 import { DevForgeBrain } from '@devforge/brain';
 import type { ModelProvider } from '@devforge/model-provider';
@@ -15,7 +15,7 @@ import type { SymbolGraph, ParsedFile } from '@devforge/symbol-graph';
 import type { KnowledgeGraph } from '@devforge/knowledge-graph';
 
 /** Handler for `devforge explain <topic>`. */
-export async function handleExplain(ctx: CliContext, topic: string): Promise<string> {
+export async function handleExplain(ctx: ExecutionContext, topic: string): Promise<string> {
   const { repository, services, config, options } = ctx;
   const { brain } = services;
 

@@ -1,12 +1,13 @@
 /**
  * @devforge/cli — doctor command (M1).
  *
- * Run health checks: workspace, provider, git, node, pnpm, configuration.
+ * Run health checks: workspace, provider, git, node, pnpm, configuration,
+ * plus tool-specific checks using the shared environment service.
  */
 
 import { execSync } from 'node:child_process';
-import type { CliContext } from '../routing/context.js';
-import { color } from '../utils/output.js';
+import type { LightCliContext } from '../services/session.js';
+import { color } from '../services/output.js';
 
 export interface HealthCheck {
   readonly name: string;
@@ -28,89 +29,13 @@ function runCheck(cmd: string): { ok: boolean; output: string } {
 }
 
 /**
- * Run the full set of health checks.
- * Returns a list of checks and whether all passed.
+ * Run tool-specific health checks that depend on the detected repository
+ * (typescript, test framework, eslint, build tool). The shared environment
+ * checks (workspace/git/node/pnpm/configuration/provider) are already computed
+ * by the light context.
  */
-export function runHealthChecks(ctx: CliContext): {
-  checks: readonly HealthCheck[];
-  allOk: boolean;
-} {
-  const { config, repository, services } = ctx;
+function runToolChecks(repository: LightCliContext['repository']): HealthCheck[] {
   const checks: HealthCheck[] = [];
-
-  // Workspace
-  checks.push({
-    name: 'workspace',
-    ok: repository.hasGit || repository.hasPackageJson,
-    detail: repository.hasGit
-      ? `detected git repo at ${repository.root}`
-      : repository.hasPackageJson
-        ? `detected package.json at ${repository.root}`
-        : `no project files found at ${repository.root}`,
-    fix: repository.hasGit || repository.hasPackageJson ? undefined : 'Run in a git repository or directory with package.json',
-  });
-
-  // Git
-  const gitCheck = runCheck('git --version');
-  checks.push({
-    name: 'git',
-    ok: gitCheck.ok,
-    detail: gitCheck.ok ? gitCheck.output : 'git not found on PATH',
-    fix: gitCheck.ok ? undefined : 'Install git: https://git-scm.com/downloads',
-  });
-
-  // Node
-  const nodeCheck = runCheck('node --version');
-  checks.push({
-    name: 'node',
-    ok: nodeCheck.ok,
-    detail: nodeCheck.ok ? nodeCheck.output : 'node not found on PATH',
-    fix: nodeCheck.ok ? undefined : 'Install Node.js >= 18: https://nodejs.org/',
-  });
-
-  // pnpm
-  const pnpmCheck = runCheck('pnpm --version');
-  checks.push({
-    name: 'pnpm',
-    ok: pnpmCheck.ok,
-    detail: pnpmCheck.ok ? pnpmCheck.output : 'pnpm not found on PATH',
-    fix: pnpmCheck.ok ? undefined : 'Install pnpm: https://pnpm.io/installation',
-  });
-
-  // Configuration
-  const configOk = config.provider === 'fake'
-    ? true
-    : !!(config.model && config.baseUrl);
-  checks.push({
-    name: 'configuration',
-    ok: configOk,
-    detail: configOk
-      ? `${config.provider} provider configured`
-      : 'openai-compatible provider must set model and baseUrl',
-    fix: configOk ? undefined : 'Set DEVFORGE_MODEL_NAME and DEVFORGE_MODEL_BASE_URL, or use provider: fake',
-  });
-
-  // Provider availability (mock check — real calls would need credentials)
-  const providerAvailable = config.provider === 'fake' || !!(config.apiKey || config.baseUrl);
-  checks.push({
-    name: 'provider',
-    ok: providerAvailable,
-    detail: providerAvailable
-      ? `${config.provider} provider ${config.model ?? '(default)'} configured`
-      : 'no credentials configured for provider',
-    fix: providerAvailable ? undefined : 'Set DEVFORGE_MODEL_API_KEY or DEVFORGE_MODEL_BASE_URL for local provider',
-  });
-
-  // Repository detection
-  const repoOk = repository.hasGit || repository.hasPackageJson;
-  checks.push({
-    name: 'repository',
-    ok: repoOk,
-    detail: repoOk
-      ? `detected at ${repository.root} (${repository.packageManager ?? 'no package manager'})`
-      : `no repository detected at ${repository.root}`,
-    fix: repoOk ? undefined : 'Run inside a git repo or project with package.json',
-  });
 
   // tsconfig for TypeScript projects
   if (repository.tsconfig) {
@@ -156,14 +81,31 @@ export function runHealthChecks(ctx: CliContext): {
     });
   }
 
+  return checks;
+}
+
+/**
+ * Run the full set of health checks.
+ * Returns a list of checks and whether all passed.
+ */
+export function runHealthChecks(ctx: LightCliContext): {
+  checks: readonly HealthCheck[];
+  allOk: boolean;
+} {
+  const { services } = ctx;
+  const checks: HealthCheck[] = [
+    ...services.environment,
+    ...runToolChecks(ctx.repository),
+  ];
+
   return {
     checks,
-    allOk: checks.every(c => c.ok),
+    allOk: checks.every((c) => c.ok),
   };
 }
 
 /** Handler for `devforge doctor`. */
-export async function handleDoctor(ctx: CliContext): Promise<string> {
+export async function handleDoctor(ctx: LightCliContext): Promise<string> {
   const { checks, allOk } = runHealthChecks(ctx);
 
   const lines = checks.map(c => {

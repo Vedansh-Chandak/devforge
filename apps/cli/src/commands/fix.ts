@@ -5,12 +5,12 @@
  * Uses the CodingEngine directly (no planner).
  */
 
-import type { CliContext } from '../routing/context.js';
-import { renderCodingReport } from '../utils/output.js';
+import type { ExecutionContext } from '../services/session.js';
+import { renderCodingReport } from '../services/output.js';
 import type { CodingReport } from '@devforge/execution';
 
 /** Handler for `devforge fix <goal>`. */
-export async function handleFix(ctx: CliContext, goal: string): Promise<string | object> {
+export async function handleFix(ctx: ExecutionContext, goal: string): Promise<string | object> {
   const { services, options } = ctx;
   const { executor } = services;
   const startTime = Date.now();

@@ -9,7 +9,7 @@ import type { ModelProvider } from '@devforge/model-provider';
 import { FakeModelProvider, OpenAICompatibleProvider } from '@devforge/model-provider';
 import { DevForgeRuntime } from '@devforge/runtime';
 import { DevForgeBrain } from '@devforge/brain';
-import type { DevForgeConfig } from '../config/config.js';
+import type { DevForgeConfig } from '../types.js';
 import { logger } from '../utils/logger.js';
 
 /** Provider factory options derived from CLI config. */
