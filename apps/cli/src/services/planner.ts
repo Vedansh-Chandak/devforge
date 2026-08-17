@@ -16,7 +16,7 @@ import { logger } from '../utils/logger.js';
 export interface PlannerService {
   readonly planner: Planner;
   /** Generate an execution plan for the given goal. */
-  plan(goal: string): Promise<import('@devforge/planner').PlanResult>;
+  plan(goal: string, options?: { signal?: AbortSignal }): Promise<import('@devforge/planner').PlanResult>;
 }
 
 /**
@@ -93,9 +93,9 @@ export function createPlannerService(
 
   return {
     planner,
-    async plan(goal: string) {
+    async plan(goal: string, options?: { signal?: AbortSignal }) {
       logger.debug('Planning for goal', { goal: goal.slice(0, 100) });
-      const result = await planner.plan(goal);
+      const result = await planner.plan(goal, options);
       if (debug && !result.ok) {
         console.error('[planner-debug] Final plan result: FAILED');
         console.error('[planner-debug] Error code:', result.error.code);

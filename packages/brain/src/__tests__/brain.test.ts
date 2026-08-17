@@ -7,7 +7,7 @@ import {
   validateQuestion,
   completeClassification,
 } from '../pipeline.js';
-import { OpenAICompatibleProvider } from '@devforge/model-provider';
+import { OpenAICompatibleProvider, ModelProviderError } from '@devforge/model-provider';
 import type { RuntimeInterface, AskResult, AskClassifiedResult, ModelProviderInterface } from '../types.js';
 
 // ────────────────────────────────────────────
@@ -997,5 +997,80 @@ describe('Full pipeline integration: Brain + OpenAICompatibleProvider + mocked H
       expect(result2.model.provider).toBe('openai-compatible');
     }
     await brain2.dispose();
+  });
+});
+
+describe('DevForgeBrain cancellation', () => {
+  it('returns provider_error with CANCELLED code when the signal aborts mid-flight', async () => {
+    const runtime = createMockRuntime();
+    const controller = new AbortController();
+    const provider: ModelProviderInterface = {
+      id: 'fake-provider',
+      generate: (request) =>
+        new Promise((_resolve, reject) => {
+          request.signal?.addEventListener('abort', () => {
+            reject(
+              new ModelProviderError('Model request cancelled', {
+                provider: 'fake-provider',
+                code: 'CANCELLED',
+                retryable: false,
+              }),
+            );
+          });
+        }),
+    };
+
+    const brain = new DevForgeBrain({ runtime, provider });
+    await brain.initialize();
+
+    const pending = brain.ask('Explain authentication', { signal: controller.signal });
+    setTimeout(() => controller.abort(), 5);
+
+    const result = await pending;
+    expect(result.status).toBe('provider_error');
+    if (result.status === 'provider_error') {
+      expect(result.errorCode).toBe('CANCELLED');
+      expect(result.retryable).toBe(false);
+    }
+
+    await brain.dispose();
+  });
+
+  it('forwards the signal into the provider request', async () => {
+    const runtime = createMockRuntime();
+    const controller = new AbortController();
+    const requests: { signal?: AbortSignal }[] = [];
+    const provider: ModelProviderInterface = {
+      id: 'fake-provider',
+      generate: async (request) => {
+        requests.push(request);
+        return {
+          content: 'Answer',
+          model: 'fake-model',
+          finishReason: 'stop' as const,
+        };
+      },
+    };
+
+    const brain = new DevForgeBrain({ runtime, provider });
+    await brain.initialize();
+    await brain.ask('Explain authentication', { signal: controller.signal });
+
+    expect(requests[0]?.signal).toBe(controller.signal);
+    await brain.dispose();
+  });
+
+  it('still answers normally when no signal is provided', async () => {
+    const runtime = createMockRuntime();
+    const provider = createMockProvider({ content: 'Plain answer' });
+    const brain = new DevForgeBrain({ runtime, provider });
+    await brain.initialize();
+
+    const result = await brain.ask('Explain authentication');
+    expect(result.status).toBe('answered');
+    if (result.status === 'answered') {
+      expect(result.answer).toBe('Plain answer');
+    }
+    await brain.dispose();
   });
 });

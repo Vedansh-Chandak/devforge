@@ -13,10 +13,7 @@
     "benchmark": "node ./bin/benchmark.js"
   },
   "dependencies": {
-    "@devforge/knowledge-graph": "workspace:*",
-    "@devforge/parser-typescript": "workspace:*",
-    "@devforge/repository-indexer": "workspace:*",
-    "@devforge/symbol-graph": "workspace:*"
+    "@devforge/memory": "workspace:*"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

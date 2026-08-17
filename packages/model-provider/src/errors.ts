@@ -10,6 +10,7 @@ export type ModelErrorCode =
   | 'INVALID_REQUEST'
   | 'MODEL_NOT_FOUND'
   | 'PROVIDER_ERROR'
+  | 'CANCELLED'
   | 'UNKNOWN';
 
 export class ModelProviderError extends Error {

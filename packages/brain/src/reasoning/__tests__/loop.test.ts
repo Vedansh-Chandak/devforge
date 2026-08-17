@@ -204,7 +204,8 @@ describe('ReasoningLoop', () => {
     });
 
     expect(result.terminationReason).toBe('CANCELLED');
-    expect(result.status).toBe('tool_executed');
+    expect(result.status).toBe('provider_error');
+    expect(result.providerError?.code).toBe('CANCELLED');
     expect(result.state.providerCalls).toBe(0);
     expect(result.state.totalToolExecutions).toBe(0);
   });

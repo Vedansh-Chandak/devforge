@@ -23,6 +23,9 @@ export interface ModelRequest {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** Optional external cancellation signal. When aborted, the provider must
+   * stop the in-flight request and reject with a `CANCELLED` error. */
+  signal?: AbortSignal;
 }
 
 export interface ModelUsage {

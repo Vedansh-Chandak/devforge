@@ -85,7 +85,7 @@ export async function handleExplain(ctx: ExecutionContext, topic: string): Promi
   }
 
   // Use Brain for natural language explanation if provider available
-  const brainResult = await brain.ask(`Explain: ${topic} in the context of this codebase`);
+  const brainResult = await brain.ask(`Explain: ${topic} in the context of this codebase`, { signal: ctx.signal });
   
   if (brainResult.status === 'answered') {
     output += `## AI Explanation\n\n${brainResult.answer}\n`;

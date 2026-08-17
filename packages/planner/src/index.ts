@@ -6,7 +6,7 @@
  */
 
 export { Planner, buildDeterministicPlan, estimateComplexity, estimateRisk, parsePlanJson } from './planner.js';
-export type { PlannerConfig } from './planner.js';
+export type { PlannerConfig, PlanOptions } from './planner.js';
 
 export { parseRequest } from './parser.js';
 export type { ParsedRequest, RequestIntent } from './parser.js';

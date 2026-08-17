@@ -1,4 +1,5 @@
 export { DevForgeBrain } from './brain.js';
+export type { AskOptions } from './brain.js';
 export { classifyIntent } from './intent.js';
 export { buildContextFromMetadata } from './context-builder.js';
 export {

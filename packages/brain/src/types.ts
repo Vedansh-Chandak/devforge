@@ -26,6 +26,7 @@ export interface ModelProviderInterface {
     messages: { role: string; content: string }[];
     temperature?: number;
     maxTokens?: number;
+    signal?: AbortSignal;
   }): Promise<ModelProviderResponse>;
 }
 

@@ -1,0 +1,191 @@
+{
+  "name": "@devforge/vscode-extension",
+  "displayName": "DevForge",
+  "description": "DevForge — autonomous coding agent inside VS Code",
+  "version": "0.1.0",
+  "publisher": "devforge",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.98.0"
+  },
+  "main": "./dist/extension.js",
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "devforge.ask",
+        "title": "DevForge: Ask"
+      },
+      {
+        "command": "devforge.plan",
+        "title": "DevForge: Plan"
+      },
+      {
+        "command": "devforge.fix",
+        "title": "DevForge: Fix"
+      },
+      {
+        "command": "devforge.review",
+        "title": "DevForge: Review"
+      },
+      {
+        "command": "devforge.explain",
+        "title": "DevForge: Explain"
+      },
+      {
+        "command": "devforge.run",
+        "title": "DevForge: Run"
+      },
+      {
+        "command": "devforge.status",
+        "title": "DevForge: Status"
+      },
+      {
+        "command": "devforge.doctor",
+        "title": "DevForge: Doctor"
+      },
+      {
+        "command": "devforge.diff.applyPatch",
+        "title": "DevForge: Apply Patch",
+        "icon": "$(check)"
+      },
+      {
+        "command": "devforge.diff.rejectPatch",
+        "title": "DevForge: Reject Patch",
+        "icon": "$(x)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "devforge.diff.applyPatch",
+          "when": "false"
+        },
+        {
+          "command": "devforge.diff.rejectPatch",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DevForge",
+      "properties": {
+        "devforge.provider": {
+          "type": "string",
+          "enum": [
+            "fake",
+            "openai-compatible"
+          ],
+          "default": "fake",
+          "description": "Model provider kind used by the DevForge engine."
+        },
+        "devforge.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model identifier for openai-compatible providers (e.g. gpt-4o)."
+        },
+        "devforge.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL for openai-compatible providers (e.g. https://api.openai.com/v1)."
+        },
+        "devforge.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for openai-compatible providers.",
+          "markdownDescription": "API key for openai-compatible providers. Prefer the `DEVFORGE_API_KEY` environment variable."
+        },
+        "devforge.maxAttempts": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "description": "Maximum repair attempts in the autonomous coding loop."
+        },
+        "devforge.autoRepair": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically repair failures after a patch is verified and fails."
+        },
+        "devforge.confirmRiskyChanges": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask for confirmation before executing risky changes or confirmation-gated plan steps."
+        },
+        "devforge.autoApprove": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-approve confirmation steps for autonomous execution (equivalent to --yes)."
+        },
+        "devforge.logLevel": {
+          "type": "string",
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "default": "info",
+          "description": "Log verbosity for the DevForge engine."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devforge",
+          "title": "DevForge",
+          "icon": "resources/devforge.svg"
+        }
+      ]
+    },
+    "views": {
+      "devforge": [
+        {
+          "id": "devforge.chat",
+          "name": "Chat",
+          "type": "webview"
+        },
+        {
+          "id": "devforge.taskHistory",
+          "name": "Task History"
+        },
+        {
+          "id": "devforge.repositoryContext",
+          "name": "Repository Context"
+        },
+        {
+          "id": "devforge.diagnostics",
+          "name": "Diagnostics"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "check-types": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@devforge/cli": "workspace:*",
+    "@devforge/execution": "workspace:*",
+    "@devforge/planner": "workspace:*",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "@types/vscode": "^1.98.0",
+    "typescript": "5.9.2",
+    "vitest": "^2.0.0"
+  }
+}

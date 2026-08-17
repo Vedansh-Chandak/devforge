@@ -1,250 +1,145 @@
+/**
+ * @devforge/benchmark — Minimal CLI (DF-024).
+ *
+ * Runs a benchmark from a dataset JSON file with an offline baseline adapter,
+ * writes a human report to stdout, and optionally persists the JSON result.
+ * This is intentionally thin; the framework itself is the deliverable.
+ */
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { writeFile, readFile, mkdir } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 
-import { 
-  runBenchmark, 
-  formatResult, 
-  runMultipleBenchmarks, 
-  calculateMedian,
-  BenchmarkResult 
-} from "./runner.js";
-
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
-// Go from packages/benchmark/src -> packages/benchmark -> packages -> devforge -> benchmarks/fixtures
-const ROOT_DIR = resolve(__dirname, "../../..");
-const FIXTURES_DIR = resolve(ROOT_DIR, "benchmarks/fixtures");
-const RESULTS_DIR = resolve(ROOT_DIR, "benchmarks/results");
-const BASELINES_DIR = resolve(ROOT_DIR, "benchmarks/baselines");
-
-const FIXTURES = {
-  small: "small",
-  medium: "medium",
-  large: "large",
-} as const;
-
-type FixtureSize = keyof typeof FIXTURES;
+import { JsonDatasetLoader } from "./task-loader.js";
+import { realFileSystemIO } from "./file-system.js";
+import { runABExperiment } from "./benchmark.js";
+import {
+  createFailBaseline,
+  createPassBaseline,
+  DeterministicBaselineAgent,
+} from "./baselines.js";
+import { toHumanReport, toJsonReport } from "./reports.js";
+import { evaluateRegression } from "./regression.js";
+import { createResultStore, FileBackend } from "./result-store.js";
+import { BenchmarkRunner } from "./benchmark-runner.js";
+import {
+  TmpRepositoryFixtureFactory,
+  RealCommandRunner,
+} from "./repository-fixture.js";
+import type {
+  BenchmarkAgent,
+  BenchmarkDataset,
+  BenchmarkResult,
+} from "./types.js";
 
 interface CliOptions {
-  size?: FixtureSize;
-  all?: boolean;
-  baseline?: boolean;
-  compare?: boolean;
-  output?: string;
-  json?: boolean;
+  dataset: string;
+  baseline: string;
+  ab: boolean;
+  compare: string | undefined;
+  output: string | undefined;
+  thresholdSuccess: number | undefined;
 }
 
-function parseArgs(): CliOptions {
-  const args = process.argv.slice(2);
-  const options: CliOptions = {};
-  
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--size" || arg === "-s") {
-      options.size = args[++i] as FixtureSize;
-    } else if (arg === "--all" || arg === "-a") {
-      options.all = true;
-    } else if (arg === "--baseline" || arg === "-b") {
-      options.baseline = true;
-    } else if (arg === "--compare" || arg === "-c") {
-      options.compare = true;
-    } else if (arg === "--output" || arg === "-o") {
-      options.output = args[++i];
-    } else if (arg === "--json" || arg === "-j") {
-      options.json = true;
-    } else if (arg === "--help" || arg === "-h") {
-      printHelp();
-      process.exit(0);
+export function parseArgs(argv: string[]): CliOptions {
+  const options: CliOptions = {
+    dataset: "dataset.json",
+    baseline: "pass",
+    ab: false,
+    compare: undefined,
+    output: undefined,
+    thresholdSuccess: undefined,
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index];
+    const value = argv[index + 1];
+    if (flag === "--dataset" && value) options.dataset = value;
+    else if (flag === "--baseline" && value) options.baseline = value;
+    else if (flag === "--ab") options.ab = true;
+    else if (flag === "--compare" && value) options.compare = value;
+    else if (flag === "--output" && value) options.output = value;
+    else if (flag === "--threshold-success" && value) {
+      options.thresholdSuccess = Number(value);
     }
   }
-  
   return options;
 }
 
-function printHelp() {
-  console.log(`
-DevForge Benchmark Suite
-
-Usage: devforge-benchmark [options]
-
-Options:
-  -s, --size <size>     Benchmark size: small, medium, large (default: small)
-  -a, --all             Run all benchmark sizes
-  -b, --baseline        Save results as baseline
-  -c, --compare         Compare with saved baseline (detect >5% regressions)
-  -o, --output <file>   Output JSON file path
-  -j, --json            Output JSON to stdout
-  -h, --help            Show this help
-
-Examples:
-  devforge-benchmark                    # Run small benchmark
-  devforge-benchmark --size medium      # Run medium benchmark
-  devforge-benchmark --all              # Run all sizes
-  devforge-benchmark --all --baseline   # Save all as baselines
-  devforge-benchmark --all --compare    # Compare all with baselines
-`);
+export function baselineFor(name: string): BenchmarkAgent {
+  if (name === "fail") return createFailBaseline();
+  if (name === "scripted-rewrite") {
+    return new DeterministicBaselineAgent(
+      {
+        outcome: "pass",
+        filesWritten: {
+          "src/sum.ts":
+            "export function sum(a: number, b: number): number {\n  return a + b;\n}\n",
+        },
+      },
+      { name: "scripted-rewrite" },
+    );
+  }
+  return createPassBaseline();
 }
 
-async function ensureDirs() {
-  await mkdir(RESULTS_DIR, { recursive: true });
-  await mkdir(BASELINES_DIR, { recursive: true });
-}
+export async function main(argv: string[]): Promise<number> {
+  const options = parseArgs(argv);
+  const loader = new JsonDatasetLoader(realFileSystemIO, process.cwd());
+  const dataset = await loader.load(options.dataset);
 
-async function saveBaseline(size: FixtureSize, results: BenchmarkResult[]) {
-  const baseline = {
-    timestamp: new Date().toISOString(),
-    size,
-    results,
-  };
-  
-  const filePath = `${BASELINES_DIR}/${size}-baseline.json`;
-  await writeFile(filePath, JSON.stringify(baseline, null, 2));
-  console.log(`\n💾 Baseline saved: ${filePath}`);
-}
+  if (options.ab) {
+    const experiment = await runABExperiment(
+      dataset,
+      {
+        name: "pass",
+        adapter: createPassBaseline({ name: "pass-a" }),
+        runnerOptions: { devforgeVersion: "cli" },
+      },
+      {
+        name: "fail",
+        adapter: createFailBaseline({ name: "fail-b" }),
+        runnerOptions: { devforgeVersion: "cli" },
+      },
+    );
+    process.stdout.write(experiment.comparisonText);
+    return 0;
+  }
 
-async function loadBaseline(size: FixtureSize) {
-  const filePath = `${BASELINES_DIR}/${size}-baseline.json`;
-  try {
-    const content = await readFile(filePath, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
+  const runner = new BenchmarkRunner({
+    dataset,
+    adapter: baselineFor(options.baseline),
+    fixtureFactory: new TmpRepositoryFixtureFactory({
+      commandRunner: new RealCommandRunner(),
+    }),
+    devforgeVersion: "cli",
+  });
+  const result = await runner.runBenchmark();
+  process.stdout.write(toHumanReport(result));
 
-function compareWithBaseline(result: BenchmarkResult, baseline: any): { regressed: boolean; details: string[] } {
-  const baselineResult = baseline.results.find((r: BenchmarkResult) => r.fixture === result.fixture);
-  if (!baselineResult) {
-    return { regressed: false, details: [] };
-  }
-  
-  const details: string[] = [];
-  let regressed = false;
-  const THRESHOLD = 0.05; // 5%
-  
-  const checkMetric = (name: string, current: number, baselineVal: number) => {
-    if (baselineVal === 0) return;
-    const diff = ((current - baselineVal) / baselineVal) * 100;
-    if (diff > THRESHOLD * 100) {
-      regressed = true;
-      details.push(`${name}: ${baselineVal}ms → ${current}ms (+${diff.toFixed(1)}%)`);
-    } else if (diff < -THRESHOLD * 100) {
-      details.push(`${name}: ${baselineVal}ms → ${current}ms (${diff.toFixed(1)}%)`);
-    }
-  };
-  
-  checkMetric("Indexing", result.timings.indexingMs, baselineResult.timings.indexingMs);
-  checkMetric("Metadata", result.timings.metadataMs, baselineResult.timings.metadataMs);
-  checkMetric("Lang Detection", result.timings.languageDetectionMs, baselineResult.timings.languageDetectionMs);
-  checkMetric("Parsing", result.timings.parsingMs, baselineResult.timings.parsingMs);
-  checkMetric("Symbol Graph", result.timings.symbolGraphMs, baselineResult.timings.symbolGraphMs);
-  checkMetric("Knowledge Graph", result.timings.knowledgeGraphMs, baselineResult.timings.knowledgeGraphMs);
-  checkMetric("Total", result.timings.totalMs, baselineResult.timings.totalMs);
-  
-  const memDiff = ((result.memory.heapUsedMB - baselineResult.memory.heapUsedMB) / baselineResult.memory.heapUsedMB) * 100;
-  if (memDiff > THRESHOLD * 100) {
-    regressed = true;
-    details.push(`Memory: ${baselineResult.memory.heapUsedMB}MB → ${result.memory.heapUsedMB}MB (+${memDiff.toFixed(1)}%)`);
-  }
-  
-  return { regressed, details };
-}
-
-async function main() {
-  const options = parseArgs();
-  await ensureDirs();
-  
-  const size = options.size || "small";
-  const sizesToRun: FixtureSize[] = options.all 
-    ? (Object.keys(FIXTURES) as FixtureSize[])
-    : [size];
-  
-  console.log(`
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                    DevForge Performance Benchmark Suite                      ║
-║                          Sizes: ${sizesToRun.join(", ").padEnd(48)}║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-`);
-  
-  const allResults: BenchmarkResult[] = [];
-  
-  for (const fixtureSize of sizesToRun) {
-    const fixturePath = resolve(FIXTURES_DIR, FIXTURES[fixtureSize]);
-    
-    console.log(`\n▶ Running ${fixtureSize} benchmark...`);
-    const results = await runMultipleBenchmarks(fixturePath, fixtureSize, 3);
-    const medianResult = calculateMedian(results);
-    allResults.push(medianResult);
-    
-    if (!options.json) {
-      console.log(formatResult(medianResult));
-    }
-  }
-  
-  // Save latest results
-  const latestResults = {
-    timestamp: new Date().toISOString(),
-    results: allResults,
-  };
-  
-  await writeFile(`${RESULTS_DIR}/latest.json`, JSON.stringify(latestResults, null, 2));
-  
-  // Save individual results
-  for (const result of allResults) {
-    await writeFile(`${RESULTS_DIR}/${result.fixture}.json`, JSON.stringify(result, null, 2));
-  }
-  
-  // Handle baseline operations
-  if (options.baseline) {
-    for (const fixtureSize of sizesToRun) {
-      const sizeResults = allResults.filter(r => r.fixture === fixtureSize);
-      await saveBaseline(fixtureSize, sizeResults);
-    }
-  }
-  
-  // Regression detection
   if (options.compare) {
-    let hasRegressions = false;
-    
-    for (const fixtureSize of sizesToRun) {
-      const baseline = await loadBaseline(fixtureSize);
-      if (!baseline) {
-        console.log(`\n⚠️  No baseline found for ${fixtureSize}. Run with --baseline first.`);
-        continue;
-      }
-      
-      const sizeResults = allResults.filter(r => r.fixture === fixtureSize);
-      for (const result of sizeResults) {
-        const { regressed, details } = compareWithBaseline(result, baseline);
-        if (regressed) {
-          hasRegressions = true;
-          console.log(`\n⚠️  REGRESSION DETECTED in ${result.fixture}:`);
-          for (const detail of details) {
-            console.log(`   - ${detail}`);
-          }
-        } else {
-          console.log(`\n✅ ${result.fixture}: No regressions (>5% threshold)`);
-        }
-      }
-    }
-    
-    if (hasRegressions) {
-      console.log(`\n❌ Regressions detected!`);
-      process.exit(1);
+    const store = createResultStore({
+      backend: new FileBackend(
+        realFileSystemIO,
+        resolve(process.cwd(), "benchmarks/results"),
+      ),
+    });
+    try {
+      const stored = await store.load(options.compare);
+      const regression = evaluateRegression(stored.result, result, {
+        minSuccessRate: options.thresholdSuccess,
+        maxRegressionRate: 0.2,
+        maxTimeoutRate: 0.2,
+      });
+      process.stdout.write(
+        regression.passed ? "REGRESSION: OK\n" : "REGRESSION: FAILED\n",
+      );
+    } catch {
+      process.stdout.write(`REGRESSION: unknown baseline '${options.compare}'\n`);
     }
   }
-  
-  // Output JSON if requested
-  if (options.json) {
-    console.log(JSON.stringify(latestResults, null, 2));
-  }
-  
+
   if (options.output) {
-    await writeFile(options.output, JSON.stringify(latestResults, null, 2));
-    console.log(`\n📄 Results written to: ${options.output}`);
+    await writeFile(options.output, toJsonReport(result), "utf8");
   }
-  
-  console.log(`\n📊 Results saved to: ${RESULTS_DIR}/`);
+  return 0;
 }
 
-main().catch(console.error);
+export type { BenchmarkDataset, BenchmarkResult };

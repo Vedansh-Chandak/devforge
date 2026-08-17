@@ -14,17 +14,17 @@ export async function handleRun(ctx: ExecutionContext, goal: string): Promise<st
   const { planner, executor } = services;
   const startTime = Date.now();
 
-  const planResult = await planner.plan(goal);
+  const planResult = await planner.plan(goal, { signal: ctx.signal });
   if (!planResult.ok) {
     return `❌ Planning failed: ${planResult.error.message}`;
   }
 
   if (options.debug) {
-    const report = await executor.executePlan(planResult.plan);
+    const report = await executor.executePlan(planResult.plan, { signal: ctx.signal });
     return `⚙️  Executing plan: ${planResult.plan.summary}\n\n${renderExecutionReport(report)}`;
   }
 
-  const report = await executor.executePlan(planResult.plan);
+  const report = await executor.executePlan(planResult.plan, { signal: ctx.signal });
   const duration = Date.now() - startTime;
 
   const enhancedReport: ExecutionReport & {

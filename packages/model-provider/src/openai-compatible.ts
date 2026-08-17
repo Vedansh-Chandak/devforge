@@ -209,9 +209,22 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
-    // Timeout via AbortController
+    // Timeout via internal AbortController, combined with any external signal.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    const externalSignal = request.signal;
+    const onExternalAbort = (): void => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        clearTimeout(timeoutId);
+        throw new ModelProviderError('Request cancelled before it started', {
+          provider: this.id,
+          code: 'CANCELLED',
+          retryable: false,
+        });
+      }
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
 
     let response: Response;
     try {
@@ -223,6 +236,18 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       });
     } catch (error: unknown) {
       clearTimeout(timeoutId);
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort);
+      }
+
+      if (externalSignal?.aborted) {
+        throw new ModelProviderError('Model request cancelled', {
+          provider: this.id,
+          code: 'CANCELLED',
+          retryable: false,
+          cause: error instanceof Error ? error : undefined,
+        });
+      }
 
       if (error instanceof Error && error.name === 'AbortError') {
         throw new ModelProviderError(
@@ -248,6 +273,9 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       );
     } finally {
       clearTimeout(timeoutId);
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort);
+      }
     }
 
     // Handle non-2xx responses

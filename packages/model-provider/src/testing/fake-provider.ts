@@ -28,7 +28,32 @@ export class FakeModelProvider extends BaseModelProvider {
     this.requestHistory.push(request);
 
     if (this.config.delay) {
-      await new Promise((resolve) => setTimeout(resolve, this.config.delay));
+      const delay = this.config.delay;
+      if (request.signal) {
+        if (request.signal.aborted) {
+          throw new ModelProviderError('Model request cancelled', {
+            provider: this.id,
+            code: 'CANCELLED',
+            retryable: false,
+          });
+        }
+        await new Promise<void>((resolve, reject) => {
+          const onAbort = (): void => {
+            clearTimeout(timer);
+            reject(
+              new ModelProviderError('Model request cancelled', {
+                provider: this.id,
+                code: 'CANCELLED',
+                retryable: false,
+              }),
+            );
+          };
+          const timer = setTimeout(resolve, delay);
+          request.signal!.addEventListener('abort', onAbort, { once: true });
+        });
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
 
     if (this.config.error) {

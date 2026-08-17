@@ -457,6 +457,82 @@ describe('OpenAICompatibleProvider', () => {
       }
     });
 
+    it('throws CANCELLED when already-aborted signal is passed', async () => {
+      const fetchFn = createMockFetch();
+      const provider = new OpenAICompatibleProvider(
+        { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },
+        fetchFn,
+      );
+      const controller = new AbortController();
+      controller.abort();
+
+      try {
+        await provider.generate({
+          messages: [{ role: 'user', content: 'hi' }],
+          signal: controller.signal,
+        });
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ModelProviderError);
+        const pe = error as ModelProviderError;
+        expect(pe.code).toBe('CANCELLED');
+        expect(pe.retryable).toBe(false);
+      }
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+
+    it('aborts the in-flight request when the external signal fires', async () => {
+      const controller = new AbortController();
+      const fetchFn = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const err = new Error('The operation was aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        });
+      });
+      const provider = new OpenAICompatibleProvider(
+        { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', timeoutMs: 10_000 },
+        fetchFn,
+      );
+
+      const pending = provider.generate({
+        messages: [{ role: 'user', content: 'hi' }],
+        signal: controller.signal,
+      });
+      setTimeout(() => controller.abort(), 5);
+
+      await expect(pending).rejects.toMatchObject({
+        code: 'CANCELLED',
+        retryable: false,
+      });
+    });
+
+    it('keeps TIMEOUT code when the internal timeout fires (not external signal)', async () => {
+      const controller = new AbortController();
+      const fetchFn = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const err = new Error('The operation was aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        });
+      });
+      const provider = new OpenAICompatibleProvider(
+        { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', timeoutMs: 10 },
+        fetchFn,
+      );
+
+      await expect(
+        provider.generate({
+          messages: [{ role: 'user', content: 'hi' }],
+          signal: controller.signal,
+        }),
+      ).rejects.toMatchObject({ code: 'TIMEOUT', retryable: true });
+    });
+
     it('handles malformed JSON response', async () => {
       const fetchFn = vi.fn().mockResolvedValue({
         ok: true,

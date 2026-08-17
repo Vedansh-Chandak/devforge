@@ -9,10 +9,19 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@devforge/autonomous": "workspace:*",
+    "@devforge/brain": "workspace:*",
+    "@devforge/errors": "workspace:*",
+    "@devforge/execution": "workspace:*",
     "@devforge/knowledge-graph": "workspace:*",
+    "@devforge/memory": "workspace:*",
+    "@devforge/model-provider": "workspace:*",
+    "@devforge/multi-agent": "workspace:*",
     "@devforge/parser-typescript": "workspace:*",
+    "@devforge/planner": "workspace:*",
     "@devforge/repository-indexer": "workspace:*",
-    "@devforge/symbol-graph": "workspace:*"
+    "@devforge/symbol-graph": "workspace:*",
+    "@devforge/tools": "workspace:*"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

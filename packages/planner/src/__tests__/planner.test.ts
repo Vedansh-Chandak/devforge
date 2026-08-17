@@ -258,6 +258,74 @@ describe('model-based planning', () => {
   });
 });
 
+describe('planner cancellation & timeout', () => {
+  it('returns CANCELLED when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const planner = new Planner({ generate: scriptedGenerator([validPlanJson()]).generate });
+
+    const result = await planner.plan('Add a login endpoint', { signal: controller.signal });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('CANCELLED');
+    expect(result.error.retryable).toBe(false);
+  });
+
+  it('links the model request signal to the external signal during flight', async () => {
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    const planner = new Planner({
+      generate: (request) =>
+        new Promise<ModelResponse>((_resolve, reject) => {
+          requestSignal = request.signal;
+          request.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    });
+
+    const pending = planner.plan('Add a login endpoint', { signal: controller.signal });
+    expect(requestSignal).toBeDefined();
+    expect(requestSignal!.aborted).toBe(false);
+
+    controller.abort();
+    await pending;
+    expect(requestSignal!.aborted).toBe(true);
+  });
+
+  it('returns CANCELLED when the model never resolves and the signal fires', async () => {
+    const controller = new AbortController();
+    const planner = new Planner({
+      generate: (request) =>
+        new Promise<ModelResponse>((resolve, reject) => {
+          request.signal?.addEventListener('abort', () => {
+            reject(new Error('aborted'));
+          });
+        }),
+    });
+
+    const pending = planner.plan('Add a login endpoint', { signal: controller.signal });
+    setTimeout(() => controller.abort(), 5);
+
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('CANCELLED');
+  });
+
+  it('times out via timeoutMs and returns CANCELLED', async () => {
+    const planner = new Planner({
+      timeoutMs: 10,
+      generate: () => new Promise<ModelResponse>(() => {
+        // never resolves
+      }),
+    });
+
+    const result = await planner.plan('Add a login endpoint');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('CANCELLED');
+  });
+});
+
 describe('parsePlanJson', () => {
   it('parses raw JSON', () => {
     expect(parsePlanJson(validPlanJson())).toEqual(VALID_PLAN);

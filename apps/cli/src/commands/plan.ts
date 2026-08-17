@@ -14,7 +14,7 @@ export async function handlePlan(ctx: ExecutionContext, goal: string): Promise<s
   const { brain, planner } = services;
 
   // 1. Brain analysis
-  const brainResult = await brain.ask(`Plan: ${goal}`);
+  const brainResult = await brain.ask(`Plan: ${goal}`, { signal: ctx.signal });
   let output = '';
   
   if (brainResult.status === 'answered') {
@@ -24,7 +24,7 @@ export async function handlePlan(ctx: ExecutionContext, goal: string): Promise<s
   }
 
   // 2. Planner: generate plan
-  const result = await planner.plan(goal);
+  const result = await planner.plan(goal, { signal: ctx.signal });
   const rendered = renderPlanResult(result);
 
   if (options.debug && result.ok) {

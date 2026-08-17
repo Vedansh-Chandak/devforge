@@ -17,7 +17,7 @@ export async function handleAsk(ctx: ExecutionContext, question: string): Promis
   // 1. Repository Discovery (already done in context)
   // 2. Repository Indexer (done inside Brain via Runtime)
   // 3. Brain: get understanding/answer
-  const brainResult = await brain.ask(question);
+  const brainResult = await brain.ask(question, { signal: ctx.signal });
 
   let output = '';
   let brainOutput: string | undefined;
@@ -37,7 +37,7 @@ export async function handleAsk(ctx: ExecutionContext, question: string): Promis
   }
 
   // 4. Planner: generate plan
-  const planResult = await planner.plan(question);
+  const planResult = await planner.plan(question, { signal: ctx.signal });
   if (!planResult.ok) {
     output += `📋 Plan failed: ${planResult.error.message}\n`;
     return output;
@@ -51,7 +51,7 @@ export async function handleAsk(ctx: ExecutionContext, question: string): Promis
     output += `⚙️  Executing plan with ${planResult.plan.steps.length} steps...\n`;
   }
 
-  const execReport = await executor.executePlan(planResult.plan);
+  const execReport = await executor.executePlan(planResult.plan, { signal: ctx.signal });
   output += renderExecutionReport(execReport);
 
   // 6. Verification is part of executor report

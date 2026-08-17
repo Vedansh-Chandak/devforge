@@ -10,7 +10,17 @@
  */
 
 import { z } from 'zod';
-import type { Tool, ToolId, ToolMetadata, ToolPermission, ToolExecutionContext, ToolResult, SideEffectLevel } from './types.js';
+import {
+  ToolError,
+  type Tool,
+  type ToolErrorCode,
+  type ToolId,
+  type ToolMetadata,
+  type ToolPermission,
+  type ToolExecutionContext,
+  type ToolResult,
+  type SideEffectLevel,
+} from './types.js';
 
 export interface FakeToolConfig<TInput = unknown, TOutput = unknown> {
   /** Tool ID (namespace.name format) */
@@ -86,11 +96,11 @@ export class FakeTool<TInput = unknown, TOutput = unknown> implements Tool<TInpu
     if (this.config.failWith) {
       return {
         success: false,
-        error: {
-          code: this.config.failWith.code,
-          message: this.config.failWith.message,
-          toolId: this.config.id,
-        } as any,
+        error: new ToolError(
+          this.config.failWith.code as ToolErrorCode,
+          this.config.failWith.message,
+          { toolId: this.config.id },
+        ),
       };
     }
 

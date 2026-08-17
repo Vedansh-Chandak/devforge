@@ -383,6 +383,25 @@ export class ReasoningLoop {
 
     const duration = nowMs() - startTimeMs;
     const terminationReason = state.terminationReason;
+
+    // A caller cancellation (aborted signal) is a distinct outcome: surface it
+    // as a structured CANCELLED provider error instead of a misleading empty
+    // tool_executed stop. Consumers (Brain, CLI) depend on this to exit cleanly.
+    if (terminationReason === 'CANCELLED' && finalAnswer === undefined) {
+      const cancelResult = this.buildProviderErrorResult(
+        state,
+        startTimeMs,
+        nowMs(),
+        new Error('Reasoning cancelled by the caller'),
+        'CANCELLED',
+      );
+      return {
+        ...cancelResult,
+        terminationReason: 'CANCELLED',
+        providerError: { ...cancelResult.providerError!, retryable: false },
+      };
+    }
+
     const status: ReasoningLoopResult['status'] =
       finalAnswer !== undefined ? 'answered' : 'tool_executed';
 

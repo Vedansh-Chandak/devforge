@@ -55,7 +55,7 @@ export interface BrainService {
   readonly brain: DevForgeBrain;
   readonly runtime: DevForgeRuntime;
   /** Ask the brain a question, returning the full AskResult. */
-  ask(question: string): Promise<import('@devforge/brain').AskResult>;
+  ask(question: string, options?: { signal?: AbortSignal }): Promise<import('@devforge/brain').AskResult>;
   /** Dispose of the brain and runtime. */
   dispose(): Promise<void>;
 }
@@ -67,6 +67,7 @@ export interface BrainService {
 export async function createBrainService(
   config: DevForgeConfig,
   repoRoot: string,
+  signal?: AbortSignal,
 ): Promise<BrainService> {
   const provider = createProvider({
     kind: config.provider,
@@ -88,8 +89,8 @@ export async function createBrainService(
   return {
     brain,
     runtime,
-    async ask(question: string) {
-      return brain.ask(question);
+    async ask(question: string, options?: { signal?: AbortSignal }) {
+      return brain.ask(question, options);
     },
     async dispose() {
       await brain.dispose();

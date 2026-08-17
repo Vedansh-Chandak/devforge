@@ -20,6 +20,12 @@ import type {
   BrainToolExecutionConfig,
 } from './types.js';
 
+/** Options for a single ask() call. */
+export interface AskOptions {
+  /** External cancellation signal. Aborting cancels the in-flight request. */
+  readonly signal?: AbortSignal;
+}
+
 /**
  * DevForge Brain — orchestrates the full AI pipeline.
  *
@@ -93,9 +99,10 @@ export class DevForgeBrain {
    * - Returns 'tool_executed' after bounded tool execution.
    * - Returns 'provider_error' on provider failure.
    */
-  async ask(question: string): Promise<AskResult> {
+  async ask(question: string, options?: AskOptions): Promise<AskResult> {
     const startTime = Date.now();
     const trimmed = question.trim();
+    const signal = options?.signal;
     const intent = classifyIntent(trimmed);
 
     // --- Invalid input: empty after trim ---
@@ -191,7 +198,13 @@ export class DevForgeBrain {
 
     const loopResult = await new ReasoningLoop().execute({
       messages: composeResult.request.messages,
-      generate: (messages) => provider.generate({ ...composeResult.request, messages: [...messages] }),
+      signal,
+      generate: (messages) =>
+        provider.generate({
+          ...composeResult.request,
+          messages: [...messages],
+          signal,
+        }),
       toolExecution: toolEnabled
         ? {
             registry: this.toolRegistry as ToolRegistry,

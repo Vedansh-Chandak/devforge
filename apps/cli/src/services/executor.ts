@@ -52,7 +52,7 @@ export interface ExecutorService {
   readonly codingModel: ProviderCodingModel;
   readonly reasoningModel: ProviderReasoningModel;
   /** Execute a full plan with step handlers for all step types. */
-  executePlan(plan: ExecutionPlan): Promise<import('@devforge/execution').ExecutionReport>;
+  executePlan(plan: ExecutionPlan, options?: { signal?: AbortSignal }): Promise<import('@devforge/execution').ExecutionReport>;
   /** Run the autonomous coding engine directly (used by `fix`). */
   fix(goal: string, context?: readonly string[]): Promise<import('@devforge/execution').CodingReport>;
 }
@@ -164,6 +164,7 @@ export async function createExecutorService(
   provider: ModelProvider,
   repoRoot: string,
   config: ExecutorConfig,
+  signal?: AbortSignal,
 ): Promise<ExecutorService> {
   // Core services
   const workspace = new Workspace({ root: repoRoot } as WorkspaceOptions);
@@ -192,6 +193,7 @@ export async function createExecutorService(
     reasoningModel,
     verificationTargets,
     cwd: repoRoot,
+    signal,
     budgets: {
       maxRepairAttempts: config.maxRepairAttempts,
     },
@@ -215,9 +217,13 @@ export async function createExecutorService(
   });
 
   // Auto-approve function for autonomous execution
-  const executePlan = async (plan: ExecutionPlan): Promise<import('@devforge/execution').ExecutionReport> => {
+  const executePlan = async (
+    plan: ExecutionPlan,
+    options?: { signal?: AbortSignal },
+  ): Promise<import('@devforge/execution').ExecutionReport> => {
     logger.debug('Executing plan', { goal: plan.goal, steps: plan.steps.length });
     
+    const executeOptions = { signal: options?.signal ?? signal };
     if (config.autoApprove) {
       // Create a copy of the plan with requiresConfirmation disabled for autonomous execution
       const sanitizedPlan: ExecutionPlan = {
@@ -225,10 +231,10 @@ export async function createExecutorService(
         requiresConfirmation: false,
         steps: plan.steps.map((step) => ({ ...step, requiresConfirmation: false })),
       };
-      return executor.execute(sanitizedPlan);
+      return executor.execute(sanitizedPlan, executeOptions);
     }
     
-    return executor.execute(plan);
+    return executor.execute(plan, executeOptions);
   };
 
   return {

@@ -86,6 +86,14 @@ export interface PlannerConfig {
   readonly maxPromptChars?: number;
   /** Number of corrective retries after invalid model output (default 1). */
   readonly maxRetries?: number;
+  /** Hard timeout in milliseconds for a single planning attempt (0 = none). */
+  readonly timeoutMs?: number;
+}
+
+/** Options for a single planning call. */
+export interface PlanOptions {
+  /** External cancellation signal. Aborting returns a `CANCELLED` result. */
+  readonly signal?: AbortSignal;
 }
 
 /** Estimate plan complexity from its steps. Pure and deterministic. */
@@ -201,28 +209,71 @@ export function parsePlanJson(content: string): unknown {
   return null;
 }
 
+/**
+ * Resolve with the promise, or reject once `signal` aborts — even if the
+ * underlying operation never settles. Used to bound model calls that may
+ * ignore their own AbortSignal.
+ */
+function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(signal.reason instanceof Error ? signal.reason : new Error('aborted'));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      reject(signal.reason instanceof Error ? signal.reason : new Error('aborted'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 /** Deterministic Planning Engine. */
 export class Planner {
   private readonly generate: ((request: ModelRequest) => Promise<ModelResponse>) | undefined;
   private readonly maxPromptChars: number;
   private readonly maxRetries: number;
+  private readonly timeoutMs: number;
 
   constructor(config?: PlannerConfig) {
     this.generate = config?.generate;
     this.maxPromptChars = config?.maxPromptChars ?? DEFAULT_MAX_PROMPT_CHARS;
     this.maxRetries = config?.maxRetries ?? 1;
+    this.timeoutMs = config?.timeoutMs ?? 0;
   }
 
   /**
    * Convert a natural-language request into a validated ExecutionPlan.
    * Never executes anything.
    */
-  async plan(input: string): Promise<PlanResult> {
+  async plan(input: string, options?: PlanOptions): Promise<PlanResult> {
+    if (options?.signal?.aborted) {
+      return this.cancelledResult();
+    }
     const parsed = parseRequest(input);
     if (!this.generate) {
       return this.planDeterministically(parsed);
     }
-    return this.planWithModel(parsed);
+    return this.planWithModel(parsed, options);
+  }
+
+  private cancelledResult(): PlanResult {
+    return {
+      ok: false,
+      error: {
+        code: 'CANCELLED',
+        message: 'Planning was cancelled.',
+        retryable: false,
+      },
+    };
   }
 
   private planDeterministically(parsed: ParsedRequest): PlanResult {
@@ -241,15 +292,47 @@ export class Planner {
     return { ok: true, plan: validation.plan };
   }
 
-  private async planWithModel(parsed: ParsedRequest): Promise<PlanResult> {
+  private async planWithModel(parsed: ParsedRequest, options?: PlanOptions): Promise<PlanResult> {
     let prompt = buildPlannerPrompt(parsed, this.maxPromptChars);
+
+    const controller = new AbortController();
+    const externalSignal = options?.signal;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (this.timeoutMs > 0) {
+      timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    }
+    const onExternalAbort = (): void => controller.abort();
+    if (externalSignal) {
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+
+    const cleanup = (): void => {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
+    };
+
     let previousOutput: string | undefined;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      if (controller.signal.aborted) {
+        cleanup();
+        return this.cancelledResult();
+      }
+
       let response: ModelResponse;
       try {
-        response = await this.generate!(prompt.request);
+        response = await raceWithAbort(
+          this.generate!({
+            ...prompt.request,
+            signal: controller.signal,
+          }),
+          controller.signal,
+        );
       } catch (error) {
+        cleanup();
+        if (controller.signal.aborted) {
+          return this.cancelledResult();
+        }
         return {
           ok: false,
           error: {
@@ -265,6 +348,7 @@ export class Planner {
       const validation = validatePlan(candidate);
 
       if (validation.valid && validation.plan) {
+        cleanup();
         return { ok: true, plan: validation.plan, model: response.model };
       }
 
@@ -278,6 +362,7 @@ export class Planner {
       }
     }
 
+    cleanup();
     return {
       ok: false,
       error: {

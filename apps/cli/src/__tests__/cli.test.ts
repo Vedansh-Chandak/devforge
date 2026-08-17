@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, DEFAULT_TEMPERATURE } from '../types.js';
 import { validateConfig, loadConfig } from '../services/config-loader.js';
 import { renderPlan, renderStatus, renderPlanResult, renderCodingReport } from '../services/output.js';
+import { formatError, ConfigError, DiscoveryError, CliError } from '../errors.js';
+import { resolveExitCode } from '../services/orchestrator.js';
 import type { ExecutionPlan } from '@devforge/planner';
 
 describe('validateConfig', () => {
@@ -95,5 +97,32 @@ describe('output', () => {
     const out = renderCodingReport(report as never);
     expect(out).toContain('SUCCESS');
     expect(out).toContain('Patches generated: 2');
+  });
+});
+
+describe('resolveExitCode', () => {
+  it('returns the typed CLI error exit code', () => {
+    expect(resolveExitCode(new ConfigError('bad config'))).toBe(2);
+    expect(resolveExitCode(new DiscoveryError('no repo'))).toBe(3);
+  });
+
+  it('returns 1 for a generic error and 1 for base CliError default', () => {
+    expect(resolveExitCode(new Error('boom'))).toBe(1);
+    expect(resolveExitCode(new CliError('unknown'))).toBe(1);
+  });
+});
+
+describe('formatError', () => {
+  it('masks secret-shaped values in rendered errors', () => {
+    const error = new Error('auth failed with sk-abcDEF123456 and bearer eyJhbGciOiJIUzI1NiJ9.tok');
+    const rendered = formatError(error, false);
+    expect(rendered).not.toContain('sk-abcDEF123456');
+    expect(rendered).not.toContain('eyJhbGciOiJIUzI1NiJ9.tok');
+  });
+
+  it('renders typed CLI errors with their code prefix', () => {
+    const rendered = formatError(new ConfigError('invalid provider'), false);
+    expect(rendered).toContain('[CONFIG_ERROR]');
+    expect(rendered).toContain('invalid provider');
   });
 });

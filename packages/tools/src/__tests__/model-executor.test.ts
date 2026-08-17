@@ -263,8 +263,23 @@ describe('executeModelToolCalls', () => {
       expect(result.results).toHaveLength(1);
       expect(result.results[0]!.status).toBe('failed');
       expect(result.results[0]!.error!.code).toBe('EXECUTION_FAILED');
-      expect(result.results[0]!.error!.message).toBe('Tool execution failed');
+      expect(result.results[0]!.error!.message).toBe('Internal error');
       expect(result.audit[0]!.status).toBe('error');
+    });
+
+    it('builds the failed result as a proper ToolError', async () => {
+      const tool = new FakeTool({
+        id: 'test.fail' as ToolId,
+        failWith: { code: 'EXECUTION_FAILED', message: 'Internal error' },
+      });
+      const result = await tool.execute({}, TEST_CONTEXT);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.name).toBe('ToolError');
+        expect(result.error.code).toBe('EXECUTION_FAILED');
+        expect(result.error.toolId).toBe('test.fail');
+        expect(result.error).toBeInstanceOf(Error);
+      }
     });
 
     it('handles tool throwing an exception', async () => {

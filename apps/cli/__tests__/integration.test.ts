@@ -221,8 +221,8 @@ describe('command handlers orchestrate services', () => {
 
     const out = (await handleAsk(executionContext(services, root), 'Build a feature')) as string;
 
-    expect(brain.ask).toHaveBeenCalledWith('Build a feature');
-    expect(planner.plan).toHaveBeenCalledWith('Build a feature');
+    expect(brain.ask).toHaveBeenCalledWith('Build a feature', { signal: undefined });
+    expect(planner.plan).toHaveBeenCalledWith('Build a feature', { signal: undefined });
     expect(executor.executePlan).toHaveBeenCalled();
     expect(out).toContain('Fake brain answer');
   });
@@ -244,7 +244,7 @@ describe('command handlers orchestrate services', () => {
     const out = (await handlePlan(executionContext(services, root), 'Refactor the module')) as string;
 
     expect(brain.ask).toHaveBeenCalled();
-    expect(planner.plan).toHaveBeenCalledWith('Refactor the module');
+    expect(planner.plan).toHaveBeenCalledWith('Refactor the module', { signal: undefined });
     expect(executor.executePlan).not.toHaveBeenCalled();
     expect(out).toContain('Test plan');
   });
@@ -256,7 +256,7 @@ describe('command handlers orchestrate services', () => {
 
     const out = (await handleRun(executionContext(services, root), 'Ship it')) as string;
 
-    expect(planner.plan).toHaveBeenCalledWith('Ship it');
+    expect(planner.plan).toHaveBeenCalledWith('Ship it', { signal: undefined });
     expect(executor.executePlan).toHaveBeenCalled();
     expect(out).toContain('COMPLETED');
   });
@@ -376,6 +376,32 @@ describe('command handlers orchestrate services', () => {
 
     const result = (await handleFix(executionContext(services, root, true), 'Fix the bug')) as object;
     expect((result as { patchesGenerated?: number }).patchesGenerated).toBe(2);
+  });
+
+  it('fix --debug still runs the coding engine (no early return)', async () => {
+    const root = await createTempMockRepo();
+    const { services, executor } = stubServices();
+    executor.fix.mockResolvedValue({
+      outcome: 'SUCCESS',
+      transactions: [],
+      patchesGenerated: 3,
+      patchCalls: 1,
+      repairAttempts: 0,
+      modelCalls: 1,
+      verificationRuns: 1,
+      diagnostics: [],
+      rollbackCount: 0,
+      events: [],
+      executionTimeMs: 90,
+    });
+
+    const ctx = executionContext(services, root, false) as { options: { debug: boolean } };
+    ctx.options.debug = true;
+    const out = (await handleFix(ctx as never, 'Fix the bug')) as string;
+
+    expect(executor.fix).toHaveBeenCalledWith('Fix the bug');
+    expect(out).toContain('Fix outcome');
+    expect(out).toContain('Patches: 3');
   });
 
   it('explain builds repository context and produces a markdown explanation', async () => {

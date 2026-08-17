@@ -46,6 +46,8 @@ export interface LightCliContext {
   services: LightServices;
   /** Global CLI options. */
   options: CliOptions;
+  /** Cancellation signal (aborted on SIGINT). */
+  signal?: AbortSignal;
 }
 
 /** AI/execution services available only to heavy commands. */
@@ -66,6 +68,8 @@ export interface ExecutionContext {
   repository: RepositoryContext;
   services: ExecutionServices;
   options: CliOptions;
+  /** Cancellation signal (aborted on SIGINT). */
+  signal?: AbortSignal;
 }
 
 /** Union accepted by the command router (either tier of context). */
@@ -80,6 +84,7 @@ export type CommandSessionContext = LightCliContext | ExecutionContext;
 export async function createLightContext(
   cwd: string,
   options: CliOptions,
+  signal?: AbortSignal,
 ): Promise<LightCliContext> {
   const { loadConfig } = await import('./config-loader.js');
   const { discoverRepository, createWorkspaceService } = await import('./workspace.js');
@@ -98,6 +103,7 @@ export async function createLightContext(
     config,
     repository,
     options,
+    signal,
     services: {
       workspace: workspaceService,
       logger,
@@ -116,8 +122,9 @@ export async function createLightContext(
 export async function createExecutionContext(
   cwd: string,
   options: CliOptions,
+  signal?: AbortSignal,
 ): Promise<ExecutionContext> {
-  const light = await createLightContext(cwd, options);
+  const light = await createLightContext(cwd, options, signal);
 
   const { createProvider, createBrainService } = await import('./brain.js');
   const { createPlannerService } = await import('./planner.js');
@@ -133,7 +140,7 @@ export async function createExecutionContext(
   });
 
   const workspaceService = light.services.workspace;
-  const brain = await createBrainService(light.config, light.repository.root);
+  const brain = await createBrainService(light.config, light.repository.root, signal);
   const planner = createPlannerService(provider, light.config.temperature ?? 0.2);
 
   // Build verification targets from repository context
@@ -144,13 +151,14 @@ export async function createExecutionContext(
     temperature: light.config.temperature ?? 0.2,
     verificationTargets,
     autoApprove: options.autoApprove,
-  });
+  }, signal);
 
   return {
     cwd: light.cwd,
     config: light.config,
     repository: light.repository,
     options: light.options,
+    signal,
     services: {
       workspace: workspaceService,
       logger,

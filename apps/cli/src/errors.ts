@@ -5,6 +5,8 @@
  * Stack traces are only rendered in --debug mode.
  */
 
+import { redactSecrets } from '@devforge/config';
+
 /** Machine-readable error codes for the CLI layer. */
 export type CliErrorCode =
   | 'CONFIG_ERROR'
@@ -83,21 +85,26 @@ export class UsageError extends CliError {
 
 /**
  * Render an unknown error to a single human-readable line with a stable code.
- * Stack traces are only emitted when debug is true.
+ * Stack traces are only emitted when debug is true. Secret-shaped values are
+ * masked before the line is shown.
  */
 export function formatError(error: unknown, debug: boolean): string {
+  let rendered: string;
   if (error instanceof CliError) {
     const prefix = `[${error.code}]`;
     if (debug && error.stack) {
-      return `${prefix} ${error.message}\n${error.stack}`;
+      rendered = `${prefix} ${error.message}\n${error.stack}`;
+    } else {
+      rendered = `${prefix} ${error.message}`;
     }
-    return `${prefix} ${error.message}`;
-  }
-  if (error instanceof Error) {
+  } else if (error instanceof Error) {
     if (debug && error.stack) {
-      return `[UNKNOWN] ${error.message}\n${error.stack}`;
+      rendered = `[UNKNOWN] ${error.message}\n${error.stack}`;
+    } else {
+      rendered = `[UNKNOWN] ${error.message}`;
     }
-    return `[UNKNOWN] ${error.message}`;
+  } else {
+    rendered = `[UNKNOWN] ${String(error)}`;
   }
-  return `[UNKNOWN] ${String(error)}`;
+  return redactSecrets(rendered);
 }

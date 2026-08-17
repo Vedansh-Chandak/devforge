@@ -9,13 +9,17 @@
 import { Command } from 'commander';
 import type { CommandSessionContext, ExecutionContext, LightCliContext } from './session.js';
 import type { CliOptions } from '../types.js';
-import { formatError } from '../errors.js';
+import { formatError, CliError } from '../errors.js';
+import { redactSecrets } from '@devforge/config';
 
 /** Command handler signature. */
 export type CommandHandler = (ctx: CommandSessionContext, ...args: string[]) => Promise<unknown>;
 
 /** Build the commander program with all commands registered. */
-export function createProgram(handlers: Record<string, CommandHandler>): Command {
+export function createProgram(
+  handlers: Record<string, CommandHandler>,
+  signal?: AbortSignal,
+): Command {
   const program = new Command();
 
   program
@@ -34,6 +38,16 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
       };
     });
 
+  const runAction = async (
+    cmd: Command,
+    handler: (ctx: CommandSessionContext) => Promise<unknown>,
+    ...args: string[]
+  ): Promise<void> => {
+    const ctx = await createSession(cmd, signal);
+    const result = await handler(ctx);
+    printResult(ctx, result);
+  };
+
   // ask <question>
   program
     .command('ask')
@@ -41,9 +55,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .argument('<question>', 'Question or task description')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'ask', ctx, String(args[0]));
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'ask', ctx, String(args[0])));
     });
 
   // explain <topic>
@@ -53,9 +65,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .argument('<topic>', 'Topic to explain')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'explain', ctx, String(args[0]));
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'explain', ctx, String(args[0])));
     });
 
   // review
@@ -64,9 +74,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .description('Review pending changes (GitService → Brain → ReasoningModel)')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'review', ctx);
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'review', ctx));
     });
 
   // fix <goal>
@@ -76,9 +84,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .argument('<goal>', 'What to fix')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'fix', ctx, String(args[0]));
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'fix', ctx, String(args[0])));
     });
 
   // plan <goal>
@@ -88,9 +94,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .argument('<goal>', 'Goal to plan for')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'plan', ctx, String(args[0]));
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'plan', ctx, String(args[0])));
     });
 
   // run <goal>
@@ -100,9 +104,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .argument('<goal>', 'Goal to run')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'run', ctx, String(args[0]));
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'run', ctx, String(args[0])));
     });
 
   // status
@@ -111,9 +113,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .description('Print workspace, provider, model, repository, branch, and engine version')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'status', ctx);
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'status', ctx));
     });
 
   // doctor
@@ -122,9 +122,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .description('Run health checks: workspace, provider, git, node, pnpm, configuration')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'doctor', ctx);
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'doctor', ctx));
     });
 
   // config
@@ -133,9 +131,7 @@ export function createProgram(handlers: Record<string, CommandHandler>): Command
     .description('Show the resolved configuration and its sources')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      const ctx = await createSession(cmd);
-      const result = await callHandler(handlers, 'config', ctx);
-      printResult(ctx, result);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'config', ctx));
     });
 
   return program;
@@ -191,6 +187,21 @@ export async function run(argv: readonly string[] = process.argv): Promise<numbe
   program.exitOverride();
   program.showHelpAfterError();
 
+  // Wire SIGINT/Ctrl-C to an AbortController threaded through session services.
+  // A second SIGINT force-exits immediately.
+  const controller = new AbortController();
+  let sigintCount = 0;
+  const onSigint = (): void => {
+    sigintCount += 1;
+    if (sigintCount > 1) {
+      process.stderr.write('\nForced exit.\n');
+      process.exit(2);
+    }
+    process.stderr.write('\nCancelling... (press Ctrl-C again to force exit)\n');
+    controller.abort('interrupted by user');
+  };
+  process.on('SIGINT', onSigint);
+
   try {
     await program.parseAsync(argv);
     return 0;
@@ -200,8 +211,21 @@ export async function run(argv: readonly string[] = process.argv): Promise<numbe
       return error.exitCode ?? 0;
     }
     process.stderr.write(`${formatError(error, false)}\n`);
-    return 1;
+    return resolveExitCode(error);
+  } finally {
+    process.removeListener('SIGINT', onSigint);
   }
+}
+
+/**
+ * Map a thrown error to a process exit code. Typed CLI errors carry their own
+ * exit code (ConfigError→2, DiscoveryError→3, ...); anything else → 1.
+ */
+export function resolveExitCode(error: unknown): number {
+  if (error instanceof CliError) {
+    return error.exitCode;
+  }
+  return 1;
 }
 
 /** Detect commander's internal ExitCodeError. */
@@ -240,7 +264,7 @@ function getCliOptions(cmd: Command): CliOptions {
  * progress. All other commands use `createExecutionContext()`, which further
  * initializes brain, planner, executor, provider, workspace, git, and runner.
  */
-async function createSession(cmd: Command): Promise<CommandSessionContext> {
+async function createSession(cmd: Command, signal?: AbortSignal): Promise<CommandSessionContext> {
   const { isLightweightCommand } = await import('./environment.js');
   const { createLightContext, createExecutionContext } = await import('./session.js');
 
@@ -248,20 +272,20 @@ async function createSession(cmd: Command): Promise<CommandSessionContext> {
   const cwd = process.cwd();
 
   if (isLightweightCommand(cmd.name())) {
-    return createLightContext(cwd, options);
+    return createLightContext(cwd, options, signal);
   }
-  return createExecutionContext(cwd, options);
+  return createExecutionContext(cwd, options, signal);
 }
 
-/** Print a command result, respecting --json flag. */
+/** Print a command result, respecting --json flag. Secret-shaped values are masked. */
 function printResult(ctx: CommandSessionContext, result: unknown): void {
   if (ctx.options.json) {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    process.stdout.write(`${redactSecrets(JSON.stringify(result, null, 2))}\n`);
   } else {
     if (typeof result === 'string') {
-      process.stdout.write(`${result}\n`);
+      process.stdout.write(`${redactSecrets(result)}\n`);
     } else if (result !== undefined && result !== null) {
-      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      process.stdout.write(`${redactSecrets(JSON.stringify(result, null, 2))}\n`);
     }
   }
 }

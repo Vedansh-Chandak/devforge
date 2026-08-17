@@ -15,10 +15,6 @@ export async function handleFix(ctx: ExecutionContext, goal: string): Promise<st
   const { executor } = services;
   const startTime = Date.now();
 
-  if (options.debug) {
-    return `🔧 Fix: ${goal}\n\nRunning autonomous coding engine...`;
-  }
-
   const report = await executor.fix(goal);
   const rendered = renderCodingReport(report);
 

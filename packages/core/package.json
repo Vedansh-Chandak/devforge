@@ -20,8 +20,6 @@
     "@devforge/runtime": "workspace:*",
     "@devforge/model-provider": "workspace:*",
     "@devforge/prompt-composer": "workspace:*",
-    "@devforge/config": "workspace:*",
-    "@devforge/logger": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
