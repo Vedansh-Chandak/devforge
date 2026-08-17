@@ -1,0 +1,1 @@
+export type Interceptors022732273 = { id: string; data: string; } | null;

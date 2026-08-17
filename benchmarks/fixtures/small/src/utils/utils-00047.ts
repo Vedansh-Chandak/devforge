@@ -1,0 +1,1 @@
+export function utils0004747(input: string): string { return `Utils0004747-${input}`; }

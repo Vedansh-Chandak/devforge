@@ -1,0 +1,24 @@
+{
+  "name": "@devforge/benchmark",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "devforge-benchmark": "./bin/benchmark.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "benchmark": "node ./bin/benchmark.js"
+  },
+  "dependencies": {
+    "@devforge/memory": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "typescript": "5.9.2",
+    "vitest": "^2.0.0"
+  }
+}

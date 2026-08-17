@@ -1,0 +1,1 @@
+export interface Utils00212212 { id: string; name: string; value: number; }

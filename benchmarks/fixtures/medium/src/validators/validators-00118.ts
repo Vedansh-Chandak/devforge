@@ -1,0 +1,1 @@
+export class Validators00118118 { constructor(public id: string) {} method() { return "Validators00118118"; } }

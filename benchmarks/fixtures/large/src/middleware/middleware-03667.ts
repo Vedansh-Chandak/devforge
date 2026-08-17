@@ -1,0 +1,1 @@
+export function middleware036673667(input: string): string { return `Middleware036673667-${input}`; }

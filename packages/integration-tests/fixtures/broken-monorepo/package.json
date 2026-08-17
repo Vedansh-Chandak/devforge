@@ -1,0 +1,15 @@
+{
+  "name": "broken-monorepo",
+  "version": "1.0.0",
+  "description": "Broken monorepo fixture",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "eslint": "^9.0.0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "simple-node",
+  "version": "1.0.0",
+  "description": "Simple Node.js project",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/**/*.test.mjs",
+    "build": "echo 'No build needed'"
+  },
+  "type": "module"
+}

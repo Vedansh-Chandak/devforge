@@ -1,4 +1,4 @@
-import { logger } from "@repo/logger";
+import { logger } from "@devforge/logger";
 import { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 

@@ -5,7 +5,7 @@ import type {
 } from "./types.js";
 import { createSymbolGraph, addNode, addEdge } from "./graph.js";
 import { resolveLocalSymbols } from "./resolver.js";
-import { linkSymbols, setAllParsedFiles } from "./linker.js";
+import { linkSymbols } from "./linker.js";
 
 interface FileSymbols {
   symbols: SymbolNode[];
@@ -15,8 +15,6 @@ interface FileSymbols {
 export function buildSymbolGraph(parsedFiles: ParsedFile[]): SymbolGraph {
   const graph = createSymbolGraph();
   const fileSymbolsMap = new Map<string, FileSymbols>();
-
-  setAllParsedFiles(parsedFiles);
 
   for (const parsedFile of parsedFiles) {
     const localSymbols = resolveLocalSymbols(parsedFile);

@@ -1,0 +1,1 @@
+export interface Repositories00436436 { id: string; name: string; value: number; }

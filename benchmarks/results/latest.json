@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-07-13T19:44:12.040Z",
+  "results": [
+    {
+      "fixture": "small",
+      "fileCount": 52,
+      "typescriptFileCount": 50,
+      "timings": {
+        "indexingMs": 5,
+        "metadataMs": 1,
+        "languageDetectionMs": 0,
+        "parsingMs": 9,
+        "symbolGraphMs": 1,
+        "knowledgeGraphMs": 0,
+        "totalMs": 16
+      },
+      "counts": {
+        "symbolCount": 113,
+        "symbolEdgeCount": 63,
+        "knowledgeNodeCount": 5,
+        "knowledgeEdgeCount": 0
+      },
+      "memory": {
+        "heapUsedMB": 36.69,
+        "heapTotalMB": 49.31,
+        "externalMB": 10.73
+      }
+    },
+    {
+      "fixture": "medium",
+      "fileCount": 502,
+      "typescriptFileCount": 500,
+      "timings": {
+        "indexingMs": 30,
+        "metadataMs": 7,
+        "languageDetectionMs": 1,
+        "parsingMs": 59,
+        "symbolGraphMs": 4,
+        "knowledgeGraphMs": 1,
+        "totalMs": 102
+      },
+      "counts": {
+        "symbolCount": 1125,
+        "symbolEdgeCount": 625,
+        "knowledgeNodeCount": 75,
+        "knowledgeEdgeCount": 0
+      },
+      "memory": {
+        "heapUsedMB": 36.02,
+        "heapTotalMB": 50.06,
+        "externalMB": 2.1
+      }
+    },
+    {
+      "fixture": "large",
+      "fileCount": 5002,
+      "typescriptFileCount": 5000,
+      "timings": {
+        "indexingMs": 248,
+        "metadataMs": 81,
+        "languageDetectionMs": 9,
+        "parsingMs": 433,
+        "symbolGraphMs": 36,
+        "knowledgeGraphMs": 19,
+        "totalMs": 826
+      },
+      "counts": {
+        "symbolCount": 11250,
+        "symbolEdgeCount": 6250,
+        "knowledgeNodeCount": 1000,
+        "knowledgeEdgeCount": 500
+      },
+      "memory": {
+        "heapUsedMB": 89.08,
+        "heapTotalMB": 111.86,
+        "externalMB": 1.96
+      }
+    }
+  ]
+}

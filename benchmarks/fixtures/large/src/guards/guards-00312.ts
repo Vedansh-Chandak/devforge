@@ -1,0 +1,1 @@
+export interface Guards00312312 { id: string; name: string; value: number; }

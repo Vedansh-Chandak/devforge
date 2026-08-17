@@ -1,0 +1,1 @@
+export function transformers00319319(input: string): string { return `Transformers00319319-${input}`; }

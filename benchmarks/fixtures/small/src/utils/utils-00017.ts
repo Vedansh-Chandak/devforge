@@ -1,0 +1,1 @@
+export type Utils0001717 = { id: string; data: string; } | null;

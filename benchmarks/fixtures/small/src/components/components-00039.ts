@@ -1,0 +1,1 @@
+export function components0003939(input: string): string { return `Components0003939-${input}`; }

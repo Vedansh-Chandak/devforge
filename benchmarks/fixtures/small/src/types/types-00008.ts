@@ -1,0 +1,1 @@
+export interface Types000088 { id: string; name: string; value: number; }

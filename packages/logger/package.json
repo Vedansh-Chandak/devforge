@@ -1,13 +1,19 @@
 {
-  "name": "@repo/logger",
+  "name": "@devforge/logger",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "build": "tsc",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@devforge/config": "workspace:*",
@@ -16,6 +22,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vitest": "^2.0.0"
   }
 }

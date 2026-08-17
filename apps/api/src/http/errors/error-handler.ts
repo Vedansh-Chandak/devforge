@@ -1,5 +1,5 @@
 import { env } from "@devforge/config";
-import { logger } from "@repo/logger";
+import { logger } from "@devforge/logger";
 import {
   FastifyError,
   FastifyInstance,

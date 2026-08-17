@@ -1,0 +1,1 @@
+export interface Validators0002828 { id: string; name: string; value: number; }

@@ -1,0 +1,1 @@
+export function controllers0005555(input: string): string { return `Controllers0005555-${input}`; }

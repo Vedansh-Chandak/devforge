@@ -1,0 +1,15 @@
+{
+  "name": "@broken-monorepo/good-pkg",
+  "version": "1.0.0",
+  "description": "Good package in monorepo",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test",
+    "lint": "eslint ."
+  },
+  "type": "module",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

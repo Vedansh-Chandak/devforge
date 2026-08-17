@@ -1,0 +1,11 @@
+{
+  "name": "broken-tests",
+  "version": "1.0.0",
+  "description": "Fixture with failing tests",
+  "main": "src/math.js",
+  "scripts": {
+    "test": "node --test test/**/*.test.mjs",
+    "build": "echo 'No build needed'"
+  },
+  "type": "module"
+}

@@ -1,4 +1,4 @@
-import { logger } from "@repo/logger";
+import { logger } from "@devforge/logger";
 import Fastify from "fastify";
 
 import { registerErrorHandler } from "./http/errors/index.js";

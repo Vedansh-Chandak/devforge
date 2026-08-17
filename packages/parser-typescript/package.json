@@ -1,14 +1,19 @@
 {
   "name": "@devforge/parser-typescript",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "build": "tsc",
+    "test": "vitest run",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "typescript": "5.9.2"

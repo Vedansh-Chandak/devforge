@@ -1,0 +1,648 @@
+{
+  "repository": "/Users/vedanshchandak/Desktop/devforge",
+  "timestamp": "2026-07-26T12:35:44.741Z",
+  "summary": {
+    "totalQuestions": 15,
+    "intentCorrect": 15,
+    "retrievalMatched": 12,
+    "contextMatched": 15,
+    "promptMatched": 13,
+    "pipelineSuccess": 15
+  },
+  "cases": [
+    {
+      "questionId": "explain-symbol-graph",
+      "question": "Explain the symbol graph pipeline",
+      "intent": {
+        "expected": "ExplainCode",
+        "actual": "ExplainCode",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "symbol-graph",
+          "buildSymbolGraph"
+        ],
+        "found": [],
+        "matched": false
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": "PROMPT_FAILURE",
+      "duration": 1139,
+      "diagnostics": {
+        "contextChars": 512,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "explain-repository-indexing",
+      "question": "Explain how repository indexing works",
+      "intent": {
+        "expected": "ExplainCode",
+        "actual": "ExplainCode",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "repository-indexer",
+          "indexRepository"
+        ],
+        "found": [],
+        "matched": false
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": "PROMPT_FAILURE",
+      "duration": 921,
+      "diagnostics": {
+        "contextChars": 516,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "explain-brain-runtime",
+      "question": "Explain how the Brain uses Runtime",
+      "intent": {
+        "expected": "ExplainCode",
+        "actual": "ExplainCode",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "DevForgeBrain",
+          "Runtime"
+        ],
+        "found": [
+          "Runtime"
+        ],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 930,
+      "diagnostics": {
+        "contextChars": 513,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "find-devforge-runtime",
+      "question": "Locate DevForgeRuntime",
+      "intent": {
+        "expected": "FindSymbol",
+        "actual": "FindSymbol",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [
+          "DevForgeRuntime"
+        ],
+        "foundSymbols": [],
+        "matched": false
+      },
+      "context": {
+        "expectedSymbols": [
+          "DevForgeRuntime"
+        ],
+        "foundInPrompt": [
+          "DevForgeRuntime"
+        ],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [],
+        "found": [],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": "RETRIEVAL_FAILURE",
+      "duration": 927,
+      "diagnostics": {
+        "contextChars": 501,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "find-devforge-brain",
+      "question": "Where is DevForgeBrain",
+      "intent": {
+        "expected": "FindSymbol",
+        "actual": "FindSymbol",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [
+          "DevForgeBrain"
+        ],
+        "foundSymbols": [],
+        "matched": false
+      },
+      "context": {
+        "expectedSymbols": [
+          "DevForgeBrain"
+        ],
+        "foundInPrompt": [
+          "DevForgeBrain"
+        ],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [],
+        "found": [],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": "RETRIEVAL_FAILURE",
+      "duration": 945,
+      "diagnostics": {
+        "contextChars": 501,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "find-build-knowledge-graph",
+      "question": "Locate buildKnowledgeGraph",
+      "intent": {
+        "expected": "FindSymbol",
+        "actual": "FindSymbol",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "buildKnowledgeGraph"
+        ],
+        "found": [
+          "buildKnowledgeGraph"
+        ],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 927,
+      "diagnostics": {
+        "contextChars": 505,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "deps-devforge-brain",
+      "question": "Show dependencies of DevForgeBrain",
+      "intent": {
+        "expected": "FindDependencies",
+        "actual": "FindDependencies",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "DevForgeBrain"
+        ],
+        "found": [
+          "DevForgeBrain"
+        ],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 1021,
+      "diagnostics": {
+        "contextChars": 513,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "deps-what-depends-on-runtime",
+      "question": "What depends on DevForgeRuntime?",
+      "intent": {
+        "expected": "FindDependencies",
+        "actual": "FindDependencies",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [
+          "DevForgeRuntime"
+        ],
+        "foundSymbols": [],
+        "matched": false
+      },
+      "context": {
+        "expectedSymbols": [
+          "DevForgeRuntime"
+        ],
+        "foundInPrompt": [
+          "DevForgeRuntime"
+        ],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [],
+        "found": [],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": "RETRIEVAL_FAILURE",
+      "duration": 959,
+      "diagnostics": {
+        "contextChars": 511,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "deps-build-symbol-graph",
+      "question": "Show dependencies of buildSymbolGraph",
+      "intent": {
+        "expected": "FindDependencies",
+        "actual": "FindDependencies",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "buildSymbolGraph"
+        ],
+        "found": [
+          "buildSymbolGraph"
+        ],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 922,
+      "diagnostics": {
+        "contextChars": 516,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "arch-show",
+      "question": "Show the architecture",
+      "intent": {
+        "expected": "Architecture",
+        "actual": "Architecture",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [],
+        "found": [],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 920,
+      "diagnostics": {
+        "contextChars": 500,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "arch-describe",
+      "question": "Show the project structure",
+      "intent": {
+        "expected": "Architecture",
+        "actual": "Architecture",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [],
+        "found": [],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 923,
+      "diagnostics": {
+        "contextChars": 505,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "search-knowledge-graph",
+      "question": "Search knowledge graph",
+      "intent": {
+        "expected": "Search",
+        "actual": "Search",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "knowledge"
+        ],
+        "found": [
+          "knowledge"
+        ],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 904,
+      "diagnostics": {
+        "contextChars": 501,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "search-model-provider",
+      "question": "Search model provider",
+      "intent": {
+        "expected": "Search",
+        "actual": "Search",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "provider"
+        ],
+        "found": [
+          "provider"
+        ],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 939,
+      "diagnostics": {
+        "contextChars": 500,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "search-prompt-composer",
+      "question": "Search prompt composer",
+      "intent": {
+        "expected": "Search",
+        "actual": "Search",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "composer"
+        ],
+        "found": [
+          "composer"
+        ],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 940,
+      "diagnostics": {
+        "contextChars": 501,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    },
+    {
+      "questionId": "search-repository-indexer",
+      "question": "Search repository indexer",
+      "intent": {
+        "expected": "Search",
+        "actual": "Search",
+        "matched": true
+      },
+      "retrieval": {
+        "expectedSymbols": [],
+        "foundSymbols": [],
+        "matched": true
+      },
+      "context": {
+        "expectedSymbols": [],
+        "foundInPrompt": [],
+        "matched": true
+      },
+      "prompt": {
+        "expectedContains": [
+          "repository"
+        ],
+        "found": [
+          "repository"
+        ],
+        "matched": true
+      },
+      "pipeline": {
+        "success": true,
+        "status": "answered"
+      },
+      "failureStage": null,
+      "duration": 938,
+      "diagnostics": {
+        "contextChars": 504,
+        "truncated": false,
+        "symbolCount": 0,
+        "dependencyCount": 0
+      }
+    }
+  ],
+  "failures": [
+    {
+      "questionId": "explain-symbol-graph",
+      "question": "Explain the symbol graph pipeline",
+      "stage": "PROMPT_FAILURE",
+      "expected": "prompt contains=[symbol-graph, buildSymbolGraph]",
+      "actual": "found=[]"
+    },
+    {
+      "questionId": "explain-repository-indexing",
+      "question": "Explain how repository indexing works",
+      "stage": "PROMPT_FAILURE",
+      "expected": "prompt contains=[repository-indexer, indexRepository]",
+      "actual": "found=[]"
+    },
+    {
+      "questionId": "find-devforge-runtime",
+      "question": "Locate DevForgeRuntime",
+      "stage": "RETRIEVAL_FAILURE",
+      "expected": "retrieval symbols=[DevForgeRuntime]",
+      "actual": "found=[]"
+    },
+    {
+      "questionId": "find-devforge-brain",
+      "question": "Where is DevForgeBrain",
+      "stage": "RETRIEVAL_FAILURE",
+      "expected": "retrieval symbols=[DevForgeBrain]",
+      "actual": "found=[]"
+    },
+    {
+      "questionId": "deps-what-depends-on-runtime",
+      "question": "What depends on DevForgeRuntime?",
+      "stage": "RETRIEVAL_FAILURE",
+      "expected": "retrieval symbols=[DevForgeRuntime]",
+      "actual": "found=[]"
+    }
+  ]
+}

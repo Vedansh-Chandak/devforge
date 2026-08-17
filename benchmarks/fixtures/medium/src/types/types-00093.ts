@@ -1,0 +1,1 @@
+export type Types0009393 = { id: string; data: string; } | null;

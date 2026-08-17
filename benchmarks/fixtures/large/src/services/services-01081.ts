@@ -1,0 +1,1 @@
+export type Services010811081 = { id: string; data: string; } | null;
