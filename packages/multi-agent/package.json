@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@devforge/execution": "workspace:*",
+    "@devforge/model-provider": "workspace:*",
     "@devforge/planner": "workspace:*"
   },
   "devDependencies": {

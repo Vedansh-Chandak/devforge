@@ -8,6 +8,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { validateModelConfig } from '@devforge/config';
 import type { DevForgeConfig } from '../types.js';
 import type { RepositoryContext } from './workspace.js';
 
@@ -81,17 +82,34 @@ export function runEnvironmentChecks(
     fix: pnpmCheck.ok ? undefined : 'Install pnpm: https://pnpm.io/installation',
   });
 
-  // Configuration
-  const configOk = config.provider === 'fake'
-    ? true
-    : !!(config.model && config.baseUrl);
+  // Configuration — provider-aware validation using the shared normalized
+  // model-config validator (DF-026C).
+  const normalized = {
+    provider: config.provider,
+    model: config.model,
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    timeoutMs: config.timeoutMs,
+    maxRetries: config.maxRetries,
+  };
+  type ModelValidation =
+    | { readonly ok: false; readonly issues: readonly { readonly path: string; readonly message: string }[] }
+    | { readonly ok: true };
+  const modelValidation: ModelValidation =
+    config.provider === 'fake' ? { ok: true } : validateModelConfig(normalized);
+  const modelConfigOk = modelValidation.ok;
+  const modelConfigErrors = modelConfigOk
+    ? []
+    : modelValidation.issues.map((issue) => `${issue.path} ${issue.message}`).join(', ');
   checks.push({
     name: 'configuration',
-    ok: configOk,
-    detail: configOk
+    ok: modelConfigOk,
+    detail: modelConfigOk
       ? `${config.provider} provider configured`
-      : 'openai-compatible provider must set model and baseUrl',
-    fix: configOk ? undefined : 'Set DEVFORGE_MODEL_NAME and DEVFORGE_MODEL_BASE_URL, or use provider: fake',
+      : `${config.provider} provider invalid: ${modelConfigErrors}`,
+    fix: modelConfigOk
+      ? undefined
+      : 'Set DEVFORGE_MODEL (and DEVFORGE_MODEL_BASE_URL for openai-compatible), or use provider: fake',
   });
 
   // Provider availability (mock check — real calls would need credentials)
@@ -103,6 +121,27 @@ export function runEnvironmentChecks(
       ? `${config.provider} provider ${config.model ?? '(default)'} configured`
       : 'no credentials configured for provider',
     fix: providerAvailable ? undefined : 'Set DEVFORGE_MODEL_API_KEY or DEVFORGE_MODEL_BASE_URL for local provider',
+  });
+
+  // Model-config: role-specific model ids must be non-empty strings.
+  const roleIssues: string[] = [];
+  for (const role of ['reasoning', 'coding', 'fast'] as const) {
+    const roleModel = config.roleModels?.[role];
+    if (roleModel !== undefined && roleModel.trim().length === 0) {
+      roleIssues.push(`${role} model is empty`);
+    }
+  }
+  const roleModelsOk = roleIssues.length === 0;
+  const configuredRoles = (['reasoning', 'coding', 'fast'] as const)
+    .filter((role) => config.roleModels?.[role] !== undefined)
+    .map((role) => `${role}=${config.roleModels?.[role]}`);
+  checks.push({
+    name: 'model-config',
+    ok: roleModelsOk,
+    detail: roleModelsOk
+      ? `role models configured: ${configuredRoles.join(', ') || 'none'}`
+      : roleIssues.join('; '),
+    fix: roleModelsOk ? undefined : 'Set DEVFORGE_REASONING_MODEL / DEVFORGE_CODING_MODEL / DEVFORGE_FAST_MODEL to non-empty values',
   });
 
   return checks;

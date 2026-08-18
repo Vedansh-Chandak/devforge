@@ -8,9 +8,17 @@
  * result always exposes a fully populated config plus per-key source tracking.
  */
 
-export type ProviderKind = "fake" | "openai-compatible";
+export type ProviderKind = "fake" | "openai-compatible" | "gemini" | "anthropic";
+
+export type ModelRole = "reasoning" | "coding" | "fast";
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
+
+export interface RoleModels {
+  reasoning?: string;
+  coding?: string;
+  fast?: string;
+}
 
 export interface RuntimeConfig {
   provider: ProviderKind;
@@ -18,6 +26,8 @@ export interface RuntimeConfig {
   baseUrl?: string;
   apiKey?: string;
   timeoutMs?: number;
+  maxRetries?: number;
+  roleModels?: RoleModels;
   temperature?: number;
   maxRepairAttempts?: number;
   workspace?: string;
@@ -46,7 +56,12 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
 /** Keys whose values must never be logged or printed. */
 export const SECRET_KEYS = ["apiKey"] as const;
 
-const PROVIDER_KINDS: readonly ProviderKind[] = ["fake", "openai-compatible"];
+const PROVIDER_KINDS: readonly ProviderKind[] = [
+  "fake",
+  "openai-compatible",
+  "gemini",
+  "anthropic",
+];
 const LOG_LEVELS: readonly LogLevel[] = ["trace", "debug", "info", "warn", "error"];
 
 /** Environment variable names mapped onto the config shape. */
@@ -60,6 +75,13 @@ const ENV_MAP: Record<string, keyof RuntimeConfig> = {
   DEVFORGE_MAX_REPAIR_ATTEMPTS: "maxRepairAttempts",
   DEVFORGE_WORKSPACE: "workspace",
   DEVFORGE_LOG_LEVEL: "logLevel",
+};
+
+/** Role-specific model env vars mapped into `roleModels`. */
+const ROLE_ENV_MAP: Record<string, keyof RoleModels> = {
+  DEVFORGE_REASONING_MODEL: "reasoning",
+  DEVFORGE_CODING_MODEL: "coding",
+  DEVFORGE_FAST_MODEL: "fast",
 };
 
 /** Numeric config keys parsed from env strings. */
@@ -85,6 +107,18 @@ export function readFromEnv(env: NodeJS.ProcessEnv = process.env): Partial<Runti
       raw[key] = value;
     }
   }
+
+  const roles: Record<string, unknown> = {};
+  for (const [envName, role] of Object.entries(ROLE_ENV_MAP)) {
+    const value = env[envName];
+    if (value !== undefined && value.trim().length > 0) {
+      roles[role] = value.trim();
+    }
+  }
+  if (Object.keys(roles).length > 0) {
+    raw.roleModels = roles;
+  }
+
   return raw as Partial<RuntimeConfig>;
 }
 
@@ -148,6 +182,30 @@ export function validateRuntimeConfig(config: RuntimeConfig): ConfigValidationRe
     if (!config.baseUrl || config.baseUrl.trim().length === 0) {
       errors.push('provider "openai-compatible" requires a "baseUrl"');
     }
+  }
+
+  if (config.provider === "gemini" || config.provider === "anthropic") {
+    if (!config.model || config.model.trim().length === 0) {
+      errors.push(`provider "${config.provider}" requires a "model"`);
+    }
+  }
+
+  if (config.roleModels !== undefined) {
+    if (typeof config.roleModels !== "object" || config.roleModels === null || Array.isArray(config.roleModels)) {
+      errors.push("roleModels must be an object");
+    } else {
+      for (const [role, model] of Object.entries(config.roleModels)) {
+        if (!["reasoning", "coding", "fast"].includes(role)) {
+          errors.push(`unknown role "${role}" in roleModels`);
+        } else if (typeof model !== "string" || model.trim().length === 0) {
+          errors.push(`roleModels.${role} must be a non-empty string`);
+        }
+      }
+    }
+  }
+
+  if (config.maxRetries !== undefined && (typeof config.maxRetries !== "number" || !Number.isInteger(config.maxRetries) || config.maxRetries < 0)) {
+    errors.push("maxRetries must be a non-negative integer");
   }
 
   if (config.temperature !== undefined && (typeof config.temperature !== "number" || config.temperature < 0 || config.temperature > 2)) {

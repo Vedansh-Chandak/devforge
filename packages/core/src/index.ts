@@ -12,7 +12,8 @@
  */
 
 export { createDevForge } from './app.js';
-export { createModelProvider } from './provider-factory.js';
+export { createModelProvider, createRawModelProvider } from './provider-factory.js';
+export { createModelRouterFromConfig } from './router.js';
 export { validateConfig, validateProviderConfig, parseEnvConfig, mergeConfig } from './config.js';
 export { DevForgeConfigError } from './types.js';
 export type {
@@ -24,4 +25,7 @@ export type {
   ProviderKind,
   FakeProviderConfig,
   OpenAICompatibleProviderConfig,
+  GeminiProviderConfig,
+  AnthropicProviderConfig,
+  RoleModelsConfig,
 } from './types.js';

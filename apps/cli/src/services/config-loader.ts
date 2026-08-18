@@ -18,6 +18,7 @@ import type {
   ProviderKind,
   RawDevForgeConfig,
   LogLevel,
+  RoleModelsConfig,
 } from '../types.js';
 import { DEFAULT_CONFIG, DEFAULT_TEMPERATURE } from '../types.js';
 
@@ -28,13 +29,21 @@ export interface ConfigValidationResult {
   readonly errors: readonly string[];
 }
 
-const PROVIDER_KINDS: readonly ProviderKind[] = ['fake', 'openai-compatible'];
+const PROVIDER_KINDS: readonly ProviderKind[] = ['fake', 'openai-compatible', 'gemini', 'anthropic'];
 const LOG_LEVELS: readonly LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error'];
+const ROLE_KEYS: readonly (keyof RoleModelsConfig)[] = ['reasoning', 'coding', 'fast'];
 
 /** Environment variable names mapped onto the config shape. */
 const ENV_MAP: Record<string, keyof RawDevForgeConfig> = {
-  DEVFORGE_PROVIDER: 'provider',
+  // Canonical DF-026C names take precedence over the legacy aliases.
+  DEVFORGE_MODEL_PROVIDER: 'provider',
   DEVFORGE_MODEL: 'model',
+  DEVFORGE_MODEL_BASE_URL: 'baseUrl',
+  DEVFORGE_MODEL_API_KEY: 'apiKey',
+  DEVFORGE_MODEL_TIMEOUT_MS: 'timeoutMs',
+  DEVFORGE_MODEL_MAX_RETRIES: 'maxRetries',
+  // Legacy aliases (kept for backward compatibility).
+  DEVFORGE_PROVIDER: 'provider',
   DEVFORGE_BASE_URL: 'baseUrl',
   DEVFORGE_API_KEY: 'apiKey',
   DEVFORGE_TIMEOUT_MS: 'timeoutMs',
@@ -43,6 +52,21 @@ const ENV_MAP: Record<string, keyof RawDevForgeConfig> = {
   DEVFORGE_WORKSPACE: 'workspace',
   DEVFORGE_LOG_LEVEL: 'logLevel',
 } as const;
+
+/** Role-specific model env vars mapped into `roleModels`. */
+const ROLE_ENV_MAP: Record<string, keyof RoleModelsConfig> = {
+  DEVFORGE_REASONING_MODEL: 'reasoning',
+  DEVFORGE_CODING_MODEL: 'coding',
+  DEVFORGE_FAST_MODEL: 'fast',
+};
+
+/** Numeric config keys parsed from env strings. */
+const NUMERIC_KEYS: ReadonlySet<keyof RawDevForgeConfig> = new Set([
+  'timeoutMs',
+  'maxRetries',
+  'temperature',
+  'maxRepairAttempts',
+]);
 
 /**
  * Validate a raw config and merge it over defaults.
@@ -63,6 +87,30 @@ export function validateConfig(raw: RawDevForgeConfig | undefined): ConfigValida
     }
     if (!input.baseUrl || input.baseUrl.trim().length === 0) {
       errors.push('provider "openai-compatible" requires a "baseUrl"');
+    }
+  }
+
+  if (provider === 'gemini' || provider === 'anthropic') {
+    if (!input.model || input.model.trim().length === 0) {
+      errors.push(`provider "${provider}" requires a "model"`);
+    }
+  }
+
+  if (input.maxRetries !== undefined && (typeof input.maxRetries !== 'number' || !Number.isInteger(input.maxRetries) || input.maxRetries < 0)) {
+    errors.push('maxRetries must be a non-negative integer');
+  }
+
+  if (input.roleModels !== undefined) {
+    if (typeof input.roleModels !== 'object' || input.roleModels === null || Array.isArray(input.roleModels)) {
+      errors.push('roleModels must be an object');
+    } else {
+      for (const [role, model] of Object.entries(input.roleModels)) {
+        if (!ROLE_KEYS.includes(role as keyof RoleModelsConfig)) {
+          errors.push(`unknown role "${role}" in roleModels`);
+        } else if (typeof model !== 'string' || model.trim().length === 0) {
+          errors.push(`roleModels.${role} must be a non-empty string`);
+        }
+      }
     }
   }
 
@@ -101,7 +149,9 @@ export function validateConfig(raw: RawDevForgeConfig | undefined): ConfigValida
     baseUrl: input.baseUrl,
     apiKey: input.apiKey,
     timeoutMs: input.timeoutMs,
+    maxRetries: input.maxRetries,
     temperature: input.temperature ?? DEFAULT_TEMPERATURE,
+    roleModels: input.roleModels,
     maxRepairAttempts: input.maxRepairAttempts,
     workspace: input.workspace,
     logLevel,
@@ -118,17 +168,42 @@ export function isProviderKind(value: unknown): value is ProviderKind {
 /** Load config from environment variables into a partial raw config. */
 export function loadFromEnv(env: NodeJS.ProcessEnv = process.env): RawDevForgeConfig {
   const raw: RawDevForgeConfig = {};
+  const stringKeys: ReadonlySet<keyof RawDevForgeConfig> = new Set([
+    'provider',
+    'model',
+    'baseUrl',
+    'apiKey',
+    'workspace',
+    'logLevel',
+  ]);
+
   for (const [envName, key] of Object.entries(ENV_MAP)) {
     const value = env[envName];
-    if (value === undefined) continue;
-    if (key === 'provider' || key === 'model' || key === 'baseUrl' ||
-        key === 'apiKey' || key === 'workspace' || key === 'logLevel') {
+    if (value === undefined || value.trim().length === 0) continue;
+    if ((raw as Record<string, unknown>)[key] !== undefined) {
+      // Canonical names appear first in ENV_MAP, so a legacy alias must not
+      // overwrite the canonical value.
+      continue;
+    }
+    if (stringKeys.has(key)) {
       (raw as Record<string, unknown>)[key] = value;
-    } else if (key === 'timeoutMs' || key === 'temperature' || key === 'maxRepairAttempts') {
+    } else if (NUMERIC_KEYS.has(key)) {
       const num = Number(value);
       if (!Number.isNaN(num)) (raw as Record<string, unknown>)[key] = num;
     }
   }
+
+  const roles: Record<string, unknown> = {};
+  for (const [envName, role] of Object.entries(ROLE_ENV_MAP)) {
+    const value = env[envName];
+    if (value !== undefined && value.trim().length > 0) {
+      roles[role] = value.trim();
+    }
+  }
+  if (Object.keys(roles).length > 0) {
+    (raw as { roleModels?: RoleModelsConfig }).roleModels = roles as RoleModelsConfig;
+  }
+
   return raw;
 }
 

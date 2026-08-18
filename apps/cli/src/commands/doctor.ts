@@ -105,8 +105,12 @@ export function runHealthChecks(ctx: LightCliContext): {
 }
 
 /** Handler for `devforge doctor`. */
-export async function handleDoctor(ctx: LightCliContext): Promise<string> {
+export async function handleDoctor(ctx: LightCliContext): Promise<string | { checks: readonly HealthCheck[]; allOk: boolean }> {
   const { checks, allOk } = runHealthChecks(ctx);
+
+  if (ctx.options.json) {
+    return { checks, allOk };
+  }
 
   const lines = checks.map(c => {
     const status = c.ok ? `${color.green('✓')} ${color.bold(c.name)}` : `${color.red('✗')} ${color.bold(c.name)}`;

@@ -6,7 +6,7 @@
  */
 
 /** Supported provider identifiers — only providers that are implemented */
-export type ProviderKind = 'fake' | 'openai-compatible';
+export type ProviderKind = 'fake' | 'openai-compatible' | 'gemini' | 'anthropic';
 
 /** Configuration for the fake provider (development/testing) */
 export interface FakeProviderConfig {
@@ -21,18 +21,59 @@ export interface FakeProviderConfig {
 /** Configuration for OpenAI-compatible providers */
 export interface OpenAICompatibleProviderConfig {
   readonly provider: 'openai-compatible';
-  /** Model identifier (e.g. 'gpt-4o', 'gpt-3.5-turbo') */
+  /** Model identifier (e.g. 'gpt-4o', 'openai/gpt-oss-20b:free') */
   readonly model: string;
-  /** Base URL for the OpenAI-compatible API (e.g. 'https://api.openai.com/v1') */
+  /** Base URL for the OpenAI-compatible API (e.g. 'https://openrouter.ai/api/v1') */
   readonly baseUrl: string;
   /** API key. Optional because local compatible servers may not require it. */
   readonly apiKey?: string;
   /** Request timeout in milliseconds */
   readonly timeoutMs?: number;
+  /** Maximum retries for retryable failures */
+  readonly maxRetries?: number;
+}
+
+/** Configuration for Google Gemini providers */
+export interface GeminiProviderConfig {
+  readonly provider: 'gemini';
+  /** Model identifier (e.g. 'gemini-2.5-flash') */
+  readonly model: string;
+  /** API key */
+  readonly apiKey?: string;
+  /** Optional API root (defaults to the Gemini API) */
+  readonly baseUrl?: string;
+  /** Request timeout in milliseconds */
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
+}
+
+/** Configuration for Anthropic providers */
+export interface AnthropicProviderConfig {
+  readonly provider: 'anthropic';
+  /** Model identifier (e.g. 'claude-sonnet-4-20250514') */
+  readonly model: string;
+  /** API key */
+  readonly apiKey?: string;
+  /** Optional API root (defaults to the Anthropic API) */
+  readonly baseUrl?: string;
+  /** Request timeout in milliseconds */
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
 }
 
 /** Union of all provider configurations */
-export type ModelProviderConfig = FakeProviderConfig | OpenAICompatibleProviderConfig;
+export type ModelProviderConfig =
+  | FakeProviderConfig
+  | OpenAICompatibleProviderConfig
+  | GeminiProviderConfig
+  | AnthropicProviderConfig;
+
+/** Role-specific model identifiers resolved through the ModelRouter. */
+export interface RoleModelsConfig {
+  readonly reasoning?: string;
+  readonly coding?: string;
+  readonly fast?: string;
+}
 
 /** Root configuration for createDevForge() */
 export interface DevForgeConfig {
@@ -43,6 +84,8 @@ export interface DevForgeConfig {
   };
   /** Model provider configuration */
   readonly model: ModelProviderConfig;
+  /** Role-specific model ids for model routing (optional). */
+  readonly roleModels?: RoleModelsConfig;
   /** Optional: max characters for combined prompt context (default: 100000) */
   readonly maxContextChars?: number;
 }
@@ -54,9 +97,14 @@ export interface DevForgeConfig {
 export interface DevForgeEnvConfig {
   DEVFORGE_MODEL_PROVIDER?: string;
   DEVFORGE_MODEL_NAME?: string;
+  DEVFORGE_MODEL?: string;
   DEVFORGE_MODEL_BASE_URL?: string;
   DEVFORGE_MODEL_API_KEY?: string;
   DEVFORGE_MODEL_TIMEOUT_MS?: string;
+  DEVFORGE_MODEL_MAX_RETRIES?: string;
+  DEVFORGE_REASONING_MODEL?: string;
+  DEVFORGE_CODING_MODEL?: string;
+  DEVFORGE_FAST_MODEL?: string;
   DEVFORGE_REPOSITORY_ROOT?: string;
 }
 

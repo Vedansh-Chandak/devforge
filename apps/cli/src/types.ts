@@ -5,7 +5,14 @@
  */
 
 /** Supported model provider kinds. */
-export type ProviderKind = 'fake' | 'openai-compatible';
+export type ProviderKind = 'fake' | 'openai-compatible' | 'gemini' | 'anthropic';
+
+/** Role → model identifier map (DF-026C). */
+export interface RoleModelsConfig {
+  readonly reasoning?: string;
+  readonly coding?: string;
+  readonly fast?: string;
+}
 
 /** Log verbosity levels. */
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
@@ -14,16 +21,20 @@ export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 export interface DevForgeConfig {
   /** Model provider kind. Defaults to 'fake'. */
   readonly provider: ProviderKind;
-  /** Model identifier for openai-compatible providers. */
+  /** Model identifier for real providers. */
   readonly model?: string;
   /** Base URL for openai-compatible providers (e.g. https://api.openai.com/v1). */
   readonly baseUrl?: string;
-  /** API key for openai-compatible providers. */
+  /** API key for real providers. */
   readonly apiKey?: string;
-  /** Request timeout for openai-compatible providers (ms). */
+  /** Request timeout for real providers (ms). */
   readonly timeoutMs?: number;
+  /** Maximum retries for retryable provider failures. */
+  readonly maxRetries?: number;
   /** Sampling temperature (0.0 - 2.0). */
   readonly temperature?: number;
+  /** Role-specific model identifiers resolved through the ModelRouter (DF-026C). */
+  readonly roleModels?: RoleModelsConfig;
   /** Maximum repair attempts in the autonomous coding loop. */
   readonly maxRepairAttempts?: number;
   /** Explicit workspace root; overrides repository discovery when set. */
@@ -39,7 +50,9 @@ export interface RawDevForgeConfig {
   readonly baseUrl?: string;
   readonly apiKey?: string;
   readonly timeoutMs?: number;
+  readonly maxRetries?: number;
   readonly temperature?: number;
+  readonly roleModels?: RoleModelsConfig;
   readonly maxRepairAttempts?: number;
   readonly workspace?: string;
   readonly logLevel?: LogLevel;
@@ -65,4 +78,6 @@ export interface CliOptions {
   debug: boolean;
   /** Auto-approve confirmation steps for autonomous execution. */
   autoApprove: boolean;
+  /** Model override for doctor checks / config display (--model). */
+  model?: string;
 }

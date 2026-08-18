@@ -269,4 +269,76 @@ describe('ModelProvider Contract', () => {
       expect(new Set(contents).size).toBe(1);
     });
   });
+
+  describe('concurrent requests', () => {
+    it('returns correct individual results under concurrency', async () => {
+      const provider = new FakeModelProvider();
+      const requests: ModelRequest[] = [
+        { messages: [{ role: 'user', content: 'A' }] },
+        { messages: [{ role: 'user', content: 'B' }] },
+        { messages: [{ role: 'user', content: 'C' }] },
+      ];
+
+      const results = await Promise.all(requests.map((r) => provider.generate(r)));
+      expect(results).toHaveLength(3);
+      results.forEach((r) => expect(r.content).toBe('Fake response'));
+    });
+
+    it('records every concurrent request in history', async () => {
+      const provider = new FakeModelProvider();
+      const contents = ['Alpha', 'Bravo', 'Charlie'];
+      await Promise.all(
+        contents.map((content) =>
+          provider.generate({ messages: [{ role: 'user', content }] }),
+        ),
+      );
+
+      const history = provider.getRequestHistory();
+      expect(history).toHaveLength(3);
+      const recorded = history.map((r) => r.messages[0]?.content);
+      expect(new Set(recorded)).toEqual(new Set(contents));
+    });
+  });
+
+  describe('extended request fields', () => {
+    it('accepts optional timeoutMs, maxRetries, metadata and responseFormat', async () => {
+      const provider = new FakeModelProvider({
+        response: { content: 'ok', finishReason: 'stop' },
+      });
+      const response = await provider.generate({
+        messages: [{ role: 'user', content: 'Hi' }],
+        timeoutMs: 5000,
+        maxRetries: 1,
+        metadata: { attempt: 3 },
+        responseFormat: { type: 'json_object' },
+      });
+      expect(response.content).toBe('ok');
+
+      const history = provider.getRequestHistory();
+      expect(history[0]?.timeoutMs).toBe(5000);
+      expect(history[0]?.maxRetries).toBe(1);
+      expect(history[0]?.metadata).toEqual({ attempt: 3 });
+      expect(history[0]?.responseFormat).toEqual({ type: 'json_object' });
+    });
+
+    it('preserves a structured-output schema on the request', async () => {
+      const provider = new FakeModelProvider();
+      await provider.generate({
+        messages: [{ role: 'user', content: 'Plan it' }],
+        responseFormat: {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: { goal: { type: 'string' } },
+            required: ['goal'],
+          },
+        },
+      });
+      const recorded = provider.getRequestHistory()[0];
+      expect(recorded?.responseFormat?.type).toBe('json_schema');
+      if (recorded?.responseFormat?.type === 'json_schema') {
+        expect(recorded.responseFormat.schema.properties).toEqual({ goal: { type: 'string' } });
+      }
+    });
+  });
 });

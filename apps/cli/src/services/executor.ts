@@ -28,7 +28,7 @@ import {
   Workspace as WorkspaceClass,
   GitService,
 } from '@devforge/execution';
-import type { ModelProvider } from '@devforge/model-provider';
+import type { ModelProvider, ModelSelectionRole } from '@devforge/model-provider';
 import type { CodePatch, StepHandler, StepContext, StepResult } from '@devforge/execution';
 import type { ExecutionPlan, PlanStepType } from '@devforge/planner';
 import { logger } from '../utils/logger.js';
@@ -40,6 +40,22 @@ export interface ExecutorConfig {
   readonly verificationTargets?: readonly VerificationTarget[];
   /** If true, automatically approve confirmation steps for autonomous execution. */
   readonly autoApprove?: boolean;
+}
+
+/**
+ * Role→provider resolver (DF-026C). Accepts either a single ModelProvider
+ * (legacy behavior: every role uses it) or a ModelRouter (role-routed:
+ * coding→CODING, reasoning→REASONING).
+ */
+export interface RouterLike {
+  readonly has: (role: ModelSelectionRole) => boolean;
+  readonly select: (role: ModelSelectionRole) => ModelProvider;
+}
+
+export type ModelSource = ModelProvider | RouterLike;
+
+function isRouter(source: ModelSource): source is RouterLike {
+  return typeof (source as { select?: unknown }).select === 'function';
 }
 
 /** Service interface for execution operations. */
@@ -158,10 +174,15 @@ async function runAnalysisStep(
 }
 
 /**
- * Create the full ExecutorService from a model provider and workspace root.
+ * Create the full ExecutorService from a model source and workspace root.
+ *
+ * @param source - either a single {@link ModelProvider} (every model-backed
+ *   component uses it) or a role-resolving {@link ModelRouter} so the coding
+ *   engine routes to the `coding` role and the reasoning engine to the
+ *   `reasoning` role (DF-026C).
  */
 export async function createExecutorService(
-  provider: ModelProvider,
+  source: ModelSource,
   repoRoot: string,
   config: ExecutorConfig,
   signal?: AbortSignal,
@@ -171,13 +192,16 @@ export async function createExecutorService(
   const runner = createCommandRunner({ workspaceRoot: repoRoot } as CommandRunnerConfig);
   const git = createGitService({ workspaceRoot: repoRoot, runner } as GitServiceConfig);
 
+  const codingProvider = isRouter(source) ? source.select('coding') : source;
+  const reasoningProvider = isRouter(source) ? source.select('reasoning') : source;
+
   // Model-backed coding & reasoning
   const codingModel = new ProviderCodingModel({
-    provider,
+    provider: codingProvider,
     settings: { temperature: config.temperature },
   });
   const reasoningModel = new ProviderReasoningModel({
-    provider,
+    provider: reasoningProvider,
     settings: { temperature: config.temperature },
   });
 

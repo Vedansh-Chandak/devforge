@@ -12,7 +12,8 @@
  *     → on invalid: one corrective retry, then PlanningError.
  */
 
-import type { ModelRequest, ModelResponse } from '@devforge/model-provider';
+import type { ModelRequest, ModelResponse, ModelSelectionRole } from '@devforge/model-provider';
+import { ModelProviderError } from '@devforge/model-provider';
 import { parseRequest } from './parser.js';
 import type { ParsedRequest, RequestIntent } from './parser.js';
 import {
@@ -88,12 +89,16 @@ export interface PlannerConfig {
   readonly maxRetries?: number;
   /** Hard timeout in milliseconds for a single planning attempt (0 = none). */
   readonly timeoutMs?: number;
+  /** Model role used for planning (DF-026C). Default: 'reasoning'. */
+  readonly role?: ModelSelectionRole;
 }
 
 /** Options for a single planning call. */
 export interface PlanOptions {
   /** External cancellation signal. Aborting returns a `CANCELLED` result. */
   readonly signal?: AbortSignal;
+  /** Per-call role override (DF-026C). Defaults to the PlannerConfig role. */
+  readonly role?: ModelSelectionRole;
 }
 
 /** Estimate plan complexity from its steps. Pure and deterministic. */
@@ -242,12 +247,14 @@ export class Planner {
   private readonly maxPromptChars: number;
   private readonly maxRetries: number;
   private readonly timeoutMs: number;
+  private readonly role: ModelSelectionRole;
 
   constructor(config?: PlannerConfig) {
     this.generate = config?.generate;
     this.maxPromptChars = config?.maxPromptChars ?? DEFAULT_MAX_PROMPT_CHARS;
     this.maxRetries = config?.maxRetries ?? 1;
     this.timeoutMs = config?.timeoutMs ?? 0;
+    this.role = config?.role ?? 'reasoning';
   }
 
   /**
@@ -258,11 +265,12 @@ export class Planner {
     if (options?.signal?.aborted) {
       return this.cancelledResult();
     }
+    const role = options?.role ?? this.role;
     const parsed = parseRequest(input);
     if (!this.generate) {
-      return this.planDeterministically(parsed);
+      return this.planDeterministically(parsed, role);
     }
-    return this.planWithModel(parsed, options);
+    return this.planWithModel(parsed, options, role);
   }
 
   private cancelledResult(): PlanResult {
@@ -276,7 +284,7 @@ export class Planner {
     };
   }
 
-  private planDeterministically(parsed: ParsedRequest): PlanResult {
+  private planDeterministically(parsed: ParsedRequest, role: ModelSelectionRole): PlanResult {
     const plan = buildDeterministicPlan(parsed);
     const validation = validatePlan(plan);
     if (!validation.valid || !validation.plan) {
@@ -289,10 +297,10 @@ export class Planner {
         },
       };
     }
-    return { ok: true, plan: validation.plan };
+    return { ok: true, plan: validation.plan, role };
   }
 
-  private async planWithModel(parsed: ParsedRequest, options?: PlanOptions): Promise<PlanResult> {
+  private async planWithModel(parsed: ParsedRequest, options?: PlanOptions, role: ModelSelectionRole = 'reasoning'): Promise<PlanResult> {
     let prompt = buildPlannerPrompt(parsed, this.maxPromptChars);
 
     const controller = new AbortController();
@@ -333,6 +341,17 @@ export class Planner {
         if (controller.signal.aborted) {
           return this.cancelledResult();
         }
+        if (error instanceof ModelProviderError) {
+          return {
+            ok: false,
+            error: {
+              code: 'MODEL_ERROR',
+              message: error.message,
+              retryable: error.retryable ?? true,
+              providerCode: error.code,
+            },
+          };
+        }
         return {
           ok: false,
           error: {
@@ -349,7 +368,7 @@ export class Planner {
 
       if (validation.valid && validation.plan) {
         cleanup();
-        return { ok: true, plan: validation.plan, model: response.model };
+        return { ok: true, plan: validation.plan, model: response.model, role };
       }
 
       if (attempt < this.maxRetries) {

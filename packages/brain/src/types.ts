@@ -1,4 +1,4 @@
-import type { ModelUsage, FinishReason } from '@devforge/model-provider';
+import type { ModelUsage, FinishReason, ModelSelectionRole, ModelConfig } from '@devforge/model-provider';
 
 export type IntentKind =
   | 'ExplainCode'
@@ -37,6 +37,21 @@ export interface ModelProviderResponse {
   usage?: ModelUsage;
 }
 
+/**
+ * Minimal role→provider router contract (DF-026C).
+ *
+ * Brain consumes a router through an interface so it never depends on the
+ * concrete `@devforge/model-provider` ModelRouter. Resolution is additive:
+ * when a `router` is configured (and no single `provider`), Brain resolves
+ * its generation provider via `select('reasoning')`.
+ */
+export interface ModelRouterInterface {
+  has(role: ModelSelectionRole): boolean;
+  select(role: ModelSelectionRole): ModelProviderInterface;
+  configFor?(role: ModelSelectionRole): ModelConfig | undefined;
+  resolve?(role: ModelSelectionRole): unknown;
+}
+
 export interface BrainToolExecutionConfig {
   /** Whether model-originated tool execution is enabled. Default: false. */
   enabled: boolean;
@@ -49,6 +64,12 @@ export interface BrainToolExecutionConfig {
 export interface BrainConfig {
   runtime: RuntimeInterface;
   provider?: ModelProviderInterface;
+  /**
+   * Role-based model router (DF-026C). Mutually exclusive with `provider`:
+   * when both are given, construction throws. When only the router is given,
+   * the generation provider is resolved via `select('reasoning')`.
+   */
+  router?: ModelRouterInterface;
   /** Max characters for the combined user message content (default: 100000) */
   maxContextChars?: number;
   /** Tool execution configuration. Disabled by default. */

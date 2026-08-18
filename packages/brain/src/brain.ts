@@ -17,6 +17,7 @@ import type {
   BrainToolCallResult,
   RuntimeInterface,
   ModelProviderInterface,
+  ModelRouterInterface,
   BrainToolExecutionConfig,
 } from './types.js';
 
@@ -44,6 +45,7 @@ export interface AskOptions {
 export class DevForgeBrain {
   private runtime: RuntimeInterface;
   private provider: ModelProviderInterface | undefined;
+  private router: ModelRouterInterface | undefined;
   private state: BrainState;
   private composer: PromptComposer;
   private toolExecutionConfig: BrainToolExecutionConfig | undefined;
@@ -54,8 +56,12 @@ export class DevForgeBrain {
     if (!config?.runtime) {
       throw new Error('Brain requires a runtime instance');
     }
+    if (config.provider && config.router) {
+      throw new Error('Brain cannot be configured with both a provider and a router');
+    }
     this.runtime = config.runtime;
     this.provider = config.provider;
+    this.router = config.router;
     this.state = { initialized: false };
     this.composer = new PromptComposer({
       maxContextChars: config.maxContextChars,
@@ -130,7 +136,8 @@ export class DevForgeBrain {
     }
 
     // --- No provider configured: classify only ---
-    if (!this.provider) {
+    const provider = this.resolveProvider();
+    if (!provider) {
       logger.warn('No provider configured, returning classified result');
       const result: AskClassifiedResult = {
         question: trimmed,
@@ -189,7 +196,6 @@ export class DevForgeBrain {
     }
 
     // --- Provider call + bounded reasoning loop (DF-011.5 Phase 2) ---
-    const provider = this.provider;
     const providerStart = Date.now();
     const toolEnabled =
       this.toolExecutionConfig?.enabled === true &&
@@ -290,6 +296,19 @@ export class DevForgeBrain {
       intent: result.intent,
       context,
     });
+  }
+
+  /**
+   * Resolve the generation provider: explicit `provider` wins; otherwise a
+   * configured `router` resolves the `reasoning` role. Both absent returns
+   * `undefined` (the brain returns a classified-only result).
+   */
+  private resolveProvider(): ModelProviderInterface | undefined {
+    if (this.provider) return this.provider;
+    if (this.router && this.router.has('reasoning')) {
+      return this.router.select('reasoning');
+    }
+    return undefined;
   }
 
   async dispose(): Promise<void> {

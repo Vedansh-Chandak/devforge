@@ -29,12 +29,14 @@ export function createProgram(
     .option('-j, --json', 'Output as JSON')
     .option('-d, --debug', 'Enable debug logging')
     .option('-y, --yes', 'Auto-approve confirmation steps (autonomous mode)')
+    .option('-m, --model <model>', 'Override the model id (doctor/config display)')
     .hook('preAction', (thisCommand) => {
       const opts = thisCommand.optsWithGlobals();
       (globalThis as { __devforgeOptions?: CliOptions }).__devforgeOptions = {
         json: !!opts.json,
         debug: !!opts.debug,
         autoApprove: !!opts.yes,
+        model: opts.model as string | undefined,
       };
     });
 
