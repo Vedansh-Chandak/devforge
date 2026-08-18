@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OpenAICompatibleProvider } from '../openai-compatible.js';
 import { ModelProviderError } from '../errors.js';
+import {
+  createMockFetch as createTestFetch,
+  openAIChatCompletion as chatCompletion,
+  fastRetryPolicy,
+} from './helpers/mock-fetch.js';
 
 // ────────────────────────────────────────────
 // Mock fetch factory
@@ -722,8 +727,288 @@ describe('OpenAICompatibleProvider', () => {
 
       await provider.generate({ messages: [{ role: 'user', content: 'hi' }] });
 
-      const init = fetchFn.mock.calls[0]?.[1];
-      expect(init?.signal).toBeInstanceOf(AbortSignal);
+const init = fetchFn.mock.calls[0]?.[1];
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+      });
+    });
+
+  // ──────────────────────────────────────────
+  // Structured output (DF-026B)
+  // ──────────────────────────────────────────
+  describe('structured output', () => {
+    const schema = {
+      type: 'object' as const,
+      properties: { ok: { type: 'boolean' as const } },
+      required: ['ok'],
+      additionalProperties: false,
+    };
+
+    function structuredProvider(fetchFn: ReturnType<typeof createTestFetch>['fetchFn']) {
+      return new OpenAICompatibleProvider(
+        { baseUrl: 'https://x/v1', model: 'gpt-4o' },
+        fetchFn,
+      );
+    }
+
+    it('translates json_schema responseFormat into response_format', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: '{"ok":true}' }, finish_reason: 'stop' }] }),
+      });
+      const provider = structuredProvider(mock.fetchFn);
+      await provider.generate({
+        messages: [{ role: 'user', content: 'hi' }],
+        responseFormat: { type: 'json_schema', schema },
+      });
+      const body = mock.requestBodies()[0]!;
+      expect(body.response_format).toEqual({
+        type: 'json_schema',
+        json_schema: { name: 'structured_output', schema },
+      });
+    });
+
+    it('sets json_object response_format mode', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: '{"k":1}' }, finish_reason: 'stop' }] }),
+      });
+      const provider = structuredProvider(mock.fetchFn);
+      await provider.generate({
+        messages: [{ role: 'user', content: 'hi' }],
+        responseFormat: { type: 'json_object' },
+      });
+      const body = mock.requestBodies()[0]!;
+      expect(body.response_format).toEqual({ type: 'json_object' });
+    });
+
+    it('validates a matching structured response and keeps raw content', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: '{"ok":true}' }, finish_reason: 'stop' }] }),
+      });
+      const provider = structuredProvider(mock.fetchFn);
+      const result = await provider.generate({
+        messages: [{ role: 'user', content: 'hi' }],
+        responseFormat: { type: 'json_schema', schema },
+      });
+      expect(result.content).toBe('{"ok":true}');
+      expect(result.provider).toBe('openai-compatible');
+    });
+
+    it('rejects a schema-mismatched structured response', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: '{"ok":"yes"}' }, finish_reason: 'stop' }] }),
+      });
+      const provider = structuredProvider(mock.fetchFn);
+      await expect(
+        provider.generate({
+          messages: [{ role: 'user', content: 'hi' }],
+          responseFormat: { type: 'json_schema', schema },
+        }),
+      ).rejects.toMatchObject({ code: 'PROVIDER_ERROR', retryable: false });
+    });
+
+    it('rejects non-JSON content for structured requests', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: 'definitely not json' }, finish_reason: 'stop' }] }),
+      });
+      const provider = structuredProvider(mock.fetchFn);
+      await expect(
+        provider.generate({
+          messages: [{ role: 'user', content: 'hi' }],
+          responseFormat: { type: 'json_schema', schema },
+        }),
+      ).rejects.toMatchObject({ code: 'PROVIDER_ERROR', retryable: false });
+    });
+
+    it('accepts valid JSON for json_object mode and rejects malformed JSON', async () => {
+      const valid = createTestFetch({
+        kind: 'json',
+        body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: '{"k":1}' }, finish_reason: 'stop' }] }),
+      });
+      const ok = await structuredProvider(valid.fetchFn).generate({
+        messages: [{ role: 'user', content: 'hi' }],
+        responseFormat: { type: 'json_object' },
+      });
+      expect(ok.provider).toBe('openai-compatible');
+
+      const invalid = createTestFetch({
+        kind: 'json',
+        body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: 'not json at all' }, finish_reason: 'stop' }] }),
+      });
+      await expect(
+        structuredProvider(invalid.fetchFn).generate({
+          messages: [{ role: 'user', content: 'hi' }],
+          responseFormat: { type: 'json_object' },
+        }),
+      ).rejects.toMatchObject({ code: 'PROVIDER_ERROR', retryable: false });
     });
   });
-});
+
+  // ──────────────────────────────────────────
+  // Retry behaviour (DF-026B — shared retry primitive)
+  // ──────────────────────────────────────────
+  describe('retry behaviour', () => {
+    function retryableProvider(
+      fetchFn: ReturnType<typeof createTestFetch>['fetchFn'],
+      retryPolicy = fastRetryPolicy(2),
+    ) {
+      return new OpenAICompatibleProvider(
+        { baseUrl: 'https://x/v1', model: 'gpt-4o', retryPolicy },
+        fetchFn,
+      );
+    }
+
+    it('retries a RATE_LIMITED failure and succeeds on recovery', async () => {
+      const mock = createTestFetch();
+      mock.enqueue({ kind: 'json', status: 429, body: { error: { message: 'slow down' } } });
+      mock.setDefault({ kind: 'json', body: chatCompletion() });
+      const provider = retryableProvider(mock.fetchFn);
+
+      const result = await provider.generate({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(result.content).toBe('Hello world');
+      expect(mock.calls).toHaveLength(2);
+    });
+
+    it('does not retry non-retryable authentication errors', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        status: 401,
+        body: { error: { message: 'nope' } },
+      });
+      const provider = retryableProvider(mock.fetchFn);
+      await expect(
+        provider.generate({ messages: [{ role: 'user', content: 'hi' }] }),
+      ).rejects.toMatchObject({ code: 'AUTHENTICATION_ERROR', retryable: false });
+      expect(mock.calls).toHaveLength(1);
+    });
+
+    it('exhausts retries and re-throws the last error unchanged', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        status: 500,
+        body: { error: { message: 'boom' } },
+      });
+      const provider = retryableProvider(mock.fetchFn);
+      await expect(
+        provider.generate({ messages: [{ role: 'user', content: 'hi' }] }),
+      ).rejects.toMatchObject({ code: 'PROVIDER_ERROR', retryable: true });
+      expect(mock.calls).toHaveLength(3);
+    });
+
+    it('respects a per-request maxRetries override', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        status: 500,
+        body: { error: { message: 'boom' } },
+      });
+      const provider = retryableProvider(mock.fetchFn, fastRetryPolicy(5));
+      await expect(
+        provider.generate({
+          messages: [{ role: 'user', content: 'hi' }],
+          maxRetries: 1,
+        }),
+      ).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
+      expect(mock.calls).toHaveLength(2);
+    });
+
+    it('reports retry metadata without leaking secrets', async () => {
+      const seen: Array<{ attempt: number; message: string }> = [];
+      const mock = createTestFetch();
+      mock.enqueue({ kind: 'json', status: 500, body: { error: { message: 'boom' } } });
+      mock.setDefault({ kind: 'json', body: chatCompletion() });
+      const provider = new OpenAICompatibleProvider(
+        {
+          baseUrl: 'https://x/v1',
+          model: 'gpt-4o',
+          apiKey: 'sk-retry-secret-999',
+          retryPolicy: fastRetryPolicy(1),
+          onRetry: (info) => seen.push({ attempt: info.attempt, message: info.error.message }),
+        },
+        mock.fetchFn,
+      );
+
+      await provider.generate({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.message).not.toContain('sk-retry-secret-999');
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // Per-request overrides
+  // ──────────────────────────────────────────
+  describe('per-request timeout override', () => {
+    it('honours request.timeoutMs even with a large provider default', async () => {
+      const mock = createTestFetch({ kind: 'listen' });
+      const provider = new OpenAICompatibleProvider(
+        { baseUrl: 'https://x/v1', model: 'gpt-4o', timeoutMs: 60_000 },
+        mock.fetchFn,
+      );
+      await expect(
+        provider.generate({
+          messages: [{ role: 'user', content: 'hi' }],
+          timeoutMs: 10,
+        }),
+      ).rejects.toMatchObject({ code: 'TIMEOUT', retryable: true });
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // Usage + metadata normalization (DF-026B)
+  // ──────────────────────────────────────────
+  describe('usage and metadata', () => {
+    it('extracts only usage fields the provider actually returned', async () => {
+      const mock = createTestFetch({
+        kind: 'json',
+        body: chatCompletion({ usage: { prompt_tokens: 7 } }),
+      });
+      const provider = new OpenAICompatibleProvider(
+        { baseUrl: 'https://x/v1', model: 'gpt-4o' },
+        mock.fetchFn,
+      );
+      const result = await provider.generate({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(result.usage).toEqual({ inputTokens: 7 });
+    });
+
+    it('exposes provider id, response id and model', async () => {
+      const mock = createTestFetch({ kind: 'json', body: chatCompletion({ id: 'chatcmpl-x1' }) });
+      const provider = new OpenAICompatibleProvider(
+        { baseUrl: 'https://x/v1', model: 'gpt-4o' },
+        mock.fetchFn,
+      );
+      const result = await provider.generate({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(result).toMatchObject({
+        provider: 'openai-compatible',
+        id: 'chatcmpl-x1',
+        model: 'gpt-4o',
+        finishReason: 'stop',
+      });
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // Concurrency
+  // ──────────────────────────────────────────
+  describe('concurrency', () => {
+    it('serves concurrent requests independently', async () => {
+      const mock = createTestFetch();
+      mock.enqueue(
+        { kind: 'json', body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: 'first' }, finish_reason: 'stop' }] }) },
+        { kind: 'json', body: chatCompletion({ choices: [{ index: 0, message: { role: 'assistant', content: 'second' }, finish_reason: 'stop' }] }) },
+      );
+      const provider = new OpenAICompatibleProvider(
+        { baseUrl: 'https://x/v1', model: 'gpt-4o' },
+        mock.fetchFn,
+      );
+      const [a, b] = await Promise.all([
+        provider.generate({ messages: [{ role: 'user', content: 'one' }] }),
+        provider.generate({ messages: [{ role: 'user', content: 'two' }] }),
+      ]);
+      expect(a.content).toBe('first');
+      expect(b.content).toBe('second');
+      expect(mock.calls).toHaveLength(2);
+    });
+  });
+  });

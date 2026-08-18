@@ -90,8 +90,11 @@ export async function createLightContext(
   const { discoverRepository, createWorkspaceService } = await import('./workspace.js');
   const { runEnvironmentChecks } = await import('./environment.js');
 
-  const { config } = await loadConfig(cwd);
-  logger.setLevel(config.logLevel);
+  const { config: loadedConfig } = await loadConfig(cwd);
+  logger.setLevel(loadedConfig.logLevel);
+
+  // --model overrides the configured model id (doctor/config display checks).
+  const config = options.model ? { ...loadedConfig, model: options.model } : loadedConfig;
 
   const repository = await discoverRepository(config.workspace ?? cwd);
   const environment = runEnvironmentChecks(repository, config);
@@ -126,27 +129,22 @@ export async function createExecutionContext(
 ): Promise<ExecutionContext> {
   const light = await createLightContext(cwd, options, signal);
 
-  const { createProvider, createBrainService } = await import('./brain.js');
+  const { createBrainService, createRouterFromConfig } = await import('./brain.js');
   const { createPlannerService } = await import('./planner.js');
   const { createExecutorService } = await import('./executor.js');
 
-  const provider = createProvider({
-    kind: light.config.provider,
-    model: light.config.model,
-    baseUrl: light.config.baseUrl,
-    apiKey: light.config.apiKey,
-    timeoutMs: light.config.timeoutMs,
-    temperature: light.config.temperature,
-  });
+  // Single router shared by brain, planner, and executor so every model-backed
+  // component resolves against the same role configuration (DF-026C).
+  const router = createRouterFromConfig(light.config);
 
   const workspaceService = light.services.workspace;
-  const brain = await createBrainService(light.config, light.repository.root, signal);
-  const planner = createPlannerService(provider, light.config.temperature ?? 0.2);
+  const brain = await createBrainService(light.config, light.repository.root, signal, { router });
+  const planner = createPlannerService(router, light.config.temperature ?? 0.2);
 
   // Build verification targets from repository context
   const verificationTargets = buildVerificationTargets(light.repository);
 
-  const executor = await createExecutorService(provider, light.repository.root, {
+  const executor = await createExecutorService(router, light.repository.root, {
     maxRepairAttempts: light.config.maxRepairAttempts ?? 3,
     temperature: light.config.temperature ?? 0.2,
     verificationTargets,

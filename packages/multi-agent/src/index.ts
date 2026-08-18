@@ -106,6 +106,12 @@ export { AgentPool } from './agent-pool.js';
 export type { RoleAgent, AgentBackend, AgentOutput } from './roles/agent.js';
 export { okOutput, failOutput, outputToResult } from './roles/agent.js';
 export { createPlannerAgent, defaultPlannerBackend } from './roles/planner-agent.js';
+export {
+  ROLE_MODEL_MAP,
+  modelRoleFor,
+  resolveModelRolesFor,
+} from './roles/model-roles.js';
+export type { AgentRoleModelMapping } from './roles/model-roles.js';
 export { createCoderAgent, defaultCoderBackend, slug, fnName } from './roles/coder-agent.js';
 export {
   createReviewerAgent,

@@ -8,7 +8,7 @@
  */
 
 import { Planner, parsePlanJson, validatePlan } from '@devforge/planner';
-import type { ModelProvider } from '@devforge/model-provider';
+import type { ModelProvider, ModelSelectionRole } from '@devforge/model-provider';
 import type { ModelRequest, ModelResponse } from '@devforge/model-provider';
 import { logger } from '../utils/logger.js';
 
@@ -20,7 +20,22 @@ export interface PlannerService {
 }
 
 /**
- * Create a PlannerService from a model provider and temperature.
+ * Role→provider resolver (DF-026C). Accepts either a single ModelProvider
+ * (legacy behavior) or a ModelRouter (planner routes to the `reasoning` role).
+ */
+export interface RouterLike {
+  readonly has: (role: ModelSelectionRole) => boolean;
+  readonly select: (role: ModelSelectionRole) => ModelProvider;
+}
+
+export type PlannerModelSource = ModelProvider | RouterLike;
+
+function isRouter(source: PlannerModelSource): source is RouterLike {
+  return typeof (source as { select?: unknown }).select === 'function';
+}
+
+/**
+ * Create a PlannerService from a model source and temperature.
  * The planner's generate function injects temperature into each request.
  *
  * When `DF_PLANNER_DEBUG` env var is set (or `--debug` with log-level trace),
@@ -28,11 +43,12 @@ export interface PlannerService {
  * causes are visible without stepping through a debugger.
  */
 export function createPlannerService(
-  provider: ModelProvider,
+  source: PlannerModelSource,
   temperature: number,
   options?: { debug?: boolean },
 ): PlannerService {
   const debug = options?.debug ?? process.env['DF_PLANNER_DEBUG'] === '1';
+  const provider = isRouter(source) ? source.select('reasoning') : source;
 
   /** Wrap generate to capture raw model output for debugging. */
   const generateWithDiagnostics = async (request: ModelRequest): Promise<ModelResponse> => {

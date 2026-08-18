@@ -85,6 +85,12 @@ export interface PlanningError {
   readonly message: string;
   /** Whether a retry could reasonably succeed. */
   readonly retryable: boolean;
+  /**
+   * Distinguishable provider-level error code when the failure originated at
+   * the model (e.g. AUTHENTICATION_ERROR, RATE_LIMITED). Absent for
+   * planning-internal failures.
+   */
+  readonly providerCode?: string;
 }
 
 /** Outcome of a planning request. */
@@ -94,6 +100,8 @@ export type PlanResult =
       readonly plan: ExecutionPlan;
       /** Model that produced the plan, when a model was used. */
       readonly model?: string;
+      /** Model role that produced the plan (DF-026C). */
+      readonly role?: string;
     }
   | {
       readonly ok: false;

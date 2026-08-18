@@ -45,8 +45,39 @@ describe('validateConfig', () => {
 
   it('rejects unknown provider', () => {
     expect(() =>
-      validateConfig({ repository: { root: '/tmp' }, model: { provider: 'anthropic' } }),
+      validateConfig({ repository: { root: '/tmp' }, model: { provider: 'ollama' } }),
     ).toThrow(DevForgeConfigError);
+  });
+
+  it('accepts gemini provider', () => {
+    const result = validateConfig({
+      repository: { root: '/tmp' },
+      model: { provider: 'gemini', model: 'gemini-2.5-flash', apiKey: 'gsk-test' },
+    });
+    expect(result.model.provider).toBe('gemini');
+  });
+
+  it('accepts anthropic provider', () => {
+    const result = validateConfig({
+      repository: { root: '/tmp' },
+      model: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', apiKey: 'sk-ant-test' },
+    });
+    expect(result.model.provider).toBe('anthropic');
+  });
+
+  it('rejects missing model for gemini', () => {
+    expect(() =>
+      validateConfig({ repository: { root: '/tmp' }, model: { provider: 'gemini' } }),
+    ).toThrow(DevForgeConfigError);
+  });
+
+  it('accepts roleModels', () => {
+    const result = validateConfig({
+      repository: { root: '/tmp' },
+      model: { provider: 'fake' },
+      roleModels: { reasoning: 'r', coding: 'c', fast: 'f' },
+    });
+    expect(result.roleModels?.coding).toBe('c');
   });
 
   it('rejects invalid URL for openai-compatible baseUrl', () => {
@@ -144,8 +175,31 @@ describe('mergeConfig', () => {
 
   it('throws for unknown env provider', () => {
     expect(() =>
-      mergeConfig({}, { DEVFORGE_MODEL_PROVIDER: 'anthropic' }),
+      mergeConfig({}, { DEVFORGE_MODEL_PROVIDER: 'ollama' }),
     ).toThrow(DevForgeConfigError);
+  });
+
+  it('accepts gemini via env', () => {
+    const merged = mergeConfig(
+      { repository: { root: '/tmp/repo' } },
+      { DEVFORGE_MODEL_PROVIDER: 'gemini', DEVFORGE_MODEL: 'gemini-2.5-flash' },
+    );
+    expect(merged.model).toMatchObject({ provider: 'gemini', model: 'gemini-2.5-flash' });
+  });
+
+  it('merges role models from env', () => {
+    const merged = mergeConfig(
+      { repository: { root: '/tmp/repo' } },
+      {
+        DEVFORGE_MODEL_PROVIDER: 'fake',
+        DEVFORGE_REASONING_MODEL: 'openai/gpt-oss-120b:free',
+        DEVFORGE_CODING_MODEL: 'cohere/north-mini-code:free',
+      },
+    );
+    expect(merged.roleModels).toEqual({
+      reasoning: 'openai/gpt-oss-120b:free',
+      coding: 'cohere/north-mini-code:free',
+    });
   });
 });
 

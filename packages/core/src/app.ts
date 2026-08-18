@@ -12,7 +12,7 @@ import { DevForgeBrain, classifyIntent, buildContextFromMetadata } from '@devfor
 import type { AskResult } from '@devforge/brain';
 import { DevForgeRuntime } from '@devforge/runtime';
 import { PromptComposer } from '@devforge/prompt-composer';
-import { createModelProvider } from './provider-factory.js';
+import { createModelRouterFromConfig } from './router.js';
 import { validateConfig, mergeConfig } from './config.js';
 import type {
   DevForgeConfig,
@@ -39,16 +39,18 @@ export async function createDevForge(
   // Merge with env and validate
   const merged = validateConfig(mergeConfig(config));
 
-  // Create provider
-  const provider = createModelProvider(merged.model);
-
   // Create runtime
   const runtime = new DevForgeRuntime({ workspaceRoot: merged.repository.root });
 
-  // Create brain with provider and runtime
+  // Role-based router (DF-026C) — brain resolves its generation provider
+  // through the reasoning role; the app also exposes the raw provider factory
+  // for callers that read the provider directly.
+  const router = createModelRouterFromConfig(merged.model, merged.roleModels);
+
+  // Create brain with router and runtime
   const brain = new DevForgeBrain({
     runtime,
-    provider,
+    router,
     maxContextChars: merged.maxContextChars,
   });
 

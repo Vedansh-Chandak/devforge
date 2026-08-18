@@ -246,6 +246,9 @@ importers:
 
   packages/config:
     dependencies:
+      '@devforge/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -529,6 +532,10 @@ importers:
         version: 2.1.9(@types/node@22.15.3)
 
   packages/model-provider:
+    dependencies:
+      '@devforge/errors':
+        specifier: workspace:*
+        version: link:../errors
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:*
@@ -548,6 +555,9 @@ importers:
       '@devforge/execution':
         specifier: workspace:*
         version: link:../execution
+      '@devforge/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
       '@devforge/planner':
         specifier: workspace:*
         version: link:../planner

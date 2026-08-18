@@ -39,11 +39,69 @@ const OpenAICompatibleProviderSchema = z.object({
     .int()
     .positive('timeoutMs must be a positive integer')
     .optional(),
+  maxRetries: z
+    .number()
+    .int()
+    .nonnegative('maxRetries must be a non-negative integer')
+    .optional(),
 });
+
+const GeminiProviderSchema = z.object({
+  provider: z.literal('gemini'),
+  model: z.string().min(1, 'model is required for gemini provider'),
+  apiKey: z.string().optional(),
+  baseUrl: z
+    .string()
+    .url('baseUrl must be a valid URL')
+    .optional(),
+  timeoutMs: z
+    .number()
+    .int()
+    .positive('timeoutMs must be a positive integer')
+    .optional(),
+  maxRetries: z
+    .number()
+    .int()
+    .nonnegative('maxRetries must be a non-negative integer')
+    .optional(),
+});
+
+const AnthropicProviderSchema = z.object({
+  provider: z.literal('anthropic'),
+  model: z.string().min(1, 'model is required for anthropic provider'),
+  apiKey: z.string().optional(),
+  baseUrl: z
+    .string()
+    .url('baseUrl must be a valid URL')
+    .optional(),
+  timeoutMs: z
+    .number()
+    .int()
+    .positive('timeoutMs must be a positive integer')
+    .optional(),
+  maxRetries: z
+    .number()
+    .int()
+    .nonnegative('maxRetries must be a non-negative integer')
+    .optional(),
+});
+
+const RoleModelsSchema = z
+  .object({
+    reasoning: z.string().min(1).optional(),
+    coding: z.string().min(1).optional(),
+    fast: z.string().min(1).optional(),
+  })
+  .refine(
+    (roles) => Object.keys(roles).length > 0,
+    'roleModels must have at least one role',
+  );
 
 const ModelProviderConfigSchema = z.discriminatedUnion('provider', [
   FakeProviderSchema,
   OpenAICompatibleProviderSchema,
+  GeminiProviderSchema,
+  AnthropicProviderSchema,
 ]);
 
 const DevForgeConfigSchema = z.object({
@@ -57,6 +115,7 @@ const DevForgeConfigSchema = z.object({
       ),
   }),
   model: ModelProviderConfigSchema,
+  roleModels: RoleModelsSchema.optional(),
   maxContextChars: z
     .number()
     .int()
@@ -116,9 +175,14 @@ export function parseEnvConfig(
   return {
     DEVFORGE_MODEL_PROVIDER: env.DEVFORGE_MODEL_PROVIDER,
     DEVFORGE_MODEL_NAME: env.DEVFORGE_MODEL_NAME,
+    DEVFORGE_MODEL: env.DEVFORGE_MODEL,
     DEVFORGE_MODEL_BASE_URL: env.DEVFORGE_MODEL_BASE_URL,
     DEVFORGE_MODEL_API_KEY: env.DEVFORGE_MODEL_API_KEY,
     DEVFORGE_MODEL_TIMEOUT_MS: env.DEVFORGE_MODEL_TIMEOUT_MS,
+    DEVFORGE_MODEL_MAX_RETRIES: env.DEVFORGE_MODEL_MAX_RETRIES,
+    DEVFORGE_REASONING_MODEL: env.DEVFORGE_REASONING_MODEL,
+    DEVFORGE_CODING_MODEL: env.DEVFORGE_CODING_MODEL,
+    DEVFORGE_FAST_MODEL: env.DEVFORGE_FAST_MODEL,
     DEVFORGE_REPOSITORY_ROOT: env.DEVFORGE_REPOSITORY_ROOT,
   };
 }
@@ -163,6 +227,24 @@ export function mergeConfig(
     model,
   };
 
+  // Normalized role models: explicit wins, then env
+  const roleModels: { reasoning?: string; coding?: string; fast?: string } = {};
+  if (explicit.roleModels) {
+    Object.assign(roleModels, explicit.roleModels);
+  }
+  if (envConfig.DEVFORGE_REASONING_MODEL) {
+    roleModels.reasoning = envConfig.DEVFORGE_REASONING_MODEL;
+  }
+  if (envConfig.DEVFORGE_CODING_MODEL) {
+    roleModels.coding = envConfig.DEVFORGE_CODING_MODEL;
+  }
+  if (envConfig.DEVFORGE_FAST_MODEL) {
+    roleModels.fast = envConfig.DEVFORGE_FAST_MODEL;
+  }
+  if (Object.keys(roleModels).length > 0) {
+    (merged as { roleModels?: RoleModels }).roleModels = roleModels;
+  }
+
   // Forward maxContextChars if provided
   if (explicit.maxContextChars !== undefined) {
     (merged as { maxContextChars?: number }).maxContextChars = explicit.maxContextChars;
@@ -181,13 +263,36 @@ function buildProviderConfigFromEnv(env: DevForgeEnvConfig): ModelProviderConfig
     return { provider: 'fake' };
   }
 
+  // Canonical model env is DEVFORGE_MODEL; DEVFORGE_MODEL_NAME is the legacy alias
+  const modelName = env.DEVFORGE_MODEL ?? env.DEVFORGE_MODEL_NAME;
+
+  const withExtras = (
+    config: ModelProviderConfig,
+  ): ModelProviderConfig => {
+    if (env.DEVFORGE_MODEL_API_KEY) {
+      (config as { apiKey?: string }).apiKey = env.DEVFORGE_MODEL_API_KEY;
+    }
+    if (env.DEVFORGE_MODEL_TIMEOUT_MS) {
+      const timeout = parseInt(env.DEVFORGE_MODEL_TIMEOUT_MS, 10);
+      if (!Number.isNaN(timeout) && timeout > 0) {
+        (config as { timeoutMs?: number }).timeoutMs = timeout;
+      }
+    }
+    if (env.DEVFORGE_MODEL_MAX_RETRIES) {
+      const retries = parseInt(env.DEVFORGE_MODEL_MAX_RETRIES, 10);
+      if (!Number.isNaN(retries) && retries >= 0) {
+        (config as { maxRetries?: number }).maxRetries = retries;
+      }
+    }
+    return config;
+  };
+
   if (providerKind === 'openai-compatible') {
-    const model = env.DEVFORGE_MODEL_NAME;
     const baseUrl = env.DEVFORGE_MODEL_BASE_URL;
 
-    if (!model) {
+    if (!modelName) {
       throw new DevForgeConfigError(
-        'DEVFORGE_MODEL_NAME is required for openai-compatible provider',
+        'DEVFORGE_MODEL is required for openai-compatible provider',
         'model.model',
         'MISSING_CONFIG',
       );
@@ -200,28 +305,44 @@ function buildProviderConfigFromEnv(env: DevForgeEnvConfig): ModelProviderConfig
       );
     }
 
-    const config: ModelProviderConfig = {
+    return withExtras({
       provider: 'openai-compatible',
-      model,
+      model: modelName,
       baseUrl,
+    });
+  }
+
+  if (providerKind === 'gemini' || providerKind === 'anthropic') {
+    if (!modelName) {
+      throw new DevForgeConfigError(
+        `DEVFORGE_MODEL is required for ${providerKind} provider`,
+        'model.model',
+        'MISSING_CONFIG',
+      );
+    }
+
+    const config: ModelProviderConfig = {
+      provider: providerKind,
+      model: modelName,
     };
 
-    if (env.DEVFORGE_MODEL_API_KEY) {
-      (config as { apiKey?: string }).apiKey = env.DEVFORGE_MODEL_API_KEY;
-    }
-    if (env.DEVFORGE_MODEL_TIMEOUT_MS) {
-      const timeout = parseInt(env.DEVFORGE_MODEL_TIMEOUT_MS, 10);
-      if (!Number.isNaN(timeout) && timeout > 0) {
-        (config as { timeoutMs?: number }).timeoutMs = timeout;
-      }
+    if (env.DEVFORGE_MODEL_BASE_URL) {
+      (config as { baseUrl?: string }).baseUrl = env.DEVFORGE_MODEL_BASE_URL;
     }
 
-    return config;
+    return withExtras(config);
   }
 
   throw new DevForgeConfigError(
-    `Unknown provider: "${providerKind}". Supported: fake, openai-compatible`,
+    `Unknown provider: "${providerKind}". Supported: fake, openai-compatible, gemini, anthropic`,
     'model.provider',
     'UNKNOWN_PROVIDER',
   );
+}
+
+/** Normalized model config (a NonNullable-safe subset for the ModelRouter). */
+interface RoleModels {
+  reasoning?: string;
+  coding?: string;
+  fast?: string;
 }
