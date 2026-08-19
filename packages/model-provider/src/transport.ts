@@ -133,6 +133,22 @@ export interface TransportRequest {
   readonly headers?: Record<string, string>;
 }
 
+/**
+ * Raw streaming response exposed by {@link HttpTransport.postStream}.
+ * Carries transport-level concerns only (status/headers/body/signal); the
+ * provider adapter owns all framing and payload parsing.
+ */
+export interface HttpStreamResponse {
+  readonly status: number;
+  readonly ok: boolean;
+  readonly url: string;
+  readonly headers: Headers;
+  /** Raw byte stream. `null` when the response has no body. */
+  readonly body: ReadableStream<Uint8Array> | null;
+  /** The signal the underlying request was issued with. */
+  readonly signal?: AbortSignal;
+}
+
 interface FetchFailure {
   readonly provider: string;
   readonly error: unknown;
@@ -184,6 +200,88 @@ function sanitizedCause(
     cause.stack = redactSecrets(error.stack, secrets);
   }
   return cause;
+}
+
+/**
+ * Wait for `promise`, but reject with an `AbortError` the moment `signal`
+ * aborts — even if `promise` would otherwise never settle. Lets a stream
+ * generation loop observe timeout/cancellation even when the underlying fetch
+ * hangs (e.g. a provider that never returns headers).
+ */
+export async function raceAgainstSignal<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    const error = new Error('The operation was aborted');
+    error.name = 'AbortError';
+    throw error;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      const error = new Error('The operation was aborted');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * Iterate a raw response body as `Uint8Array` chunks. The host signal drives
+ * teardown: on abort the underlying reader is cancelled so a stuck read
+ * settles (`done`), and the loop ends cleanly. Termination cause is the
+ * caller's concern (`withStreamTimeout` supplies `TIMEOUT` / `CANCELLED`);
+ * this helper never fabricates errors.
+ */
+export async function* readStreamBody(
+  body: ReadableStream<Uint8Array> | null,
+  signal?: AbortSignal,
+): AsyncGenerator<Uint8Array> {
+  if (!body) return;
+  const reader = body.getReader();
+  const onAbort = (): void => {
+    void reader.cancel().catch(() => {});
+  };
+  if (signal) {
+    if (signal.aborted) {
+      void reader.cancel().catch(() => {});
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+  try {
+    for (;;) {
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await reader.read();
+      } catch (error) {
+        // Abort teardown is signalled by the wrapper, not by the reader.
+        if (signal?.aborted) return;
+        throw error;
+      }
+      if (result.done) return;
+      yield result.value;
+    }
+  } finally {
+    if (signal) signal.removeEventListener('abort', onAbort);
+    try {
+      reader.releaseLock();
+    } catch {
+      // The reader may already be released by `cancel()`.
+    }
+  }
 }
 
 /**
@@ -258,6 +356,56 @@ export class HttpTransport {
         retryable: false,
       });
     }
+  }
+
+  /** Redact configured credentials from an arbitrary diagnostic string. */
+  sanitize(value: string): string {
+    return redactSecrets(value, this.secrets);
+  }
+
+  /**
+   * POST a JSON body and return the raw streaming response.
+   *
+   * This is the streaming counterpart of {@link post}. It normalizes HTTP and
+   * network failures into {@link ModelProviderError}s (applying the provider's
+   * status classifier and credential redaction) but does NOT read the body —
+   * providers iterate it themselves via {@link readStreamBody}. The response
+   * never resolves headers until the provider's parsing layer requests them,
+   * and no event payload is ever buffered here.
+   */
+  async postStream(request: TransportRequest): Promise<HttpStreamResponse> {
+    const url = this.endpoint(request.path);
+    const body =
+      request.body === undefined ? undefined : JSON.stringify(request.body);
+
+    let response: Response;
+    try {
+      const fetchPromise = this.fetchFn(url, {
+        method: 'POST',
+        headers: this.buildHeaders(request.headers),
+        ...(body !== undefined ? { body } : {}),
+        signal: request.signal,
+      });
+      response = await raceAgainstSignal(fetchPromise, request.signal);
+    } catch (error: unknown) {
+      throw mapFetchFailure(
+        { provider: this.provider, error, url, aborted: request.signal?.aborted ?? false },
+        this.secrets,
+      );
+    }
+
+    if (!response.ok) {
+      throw await this.mapHttpError(response);
+    }
+
+    return {
+      status: response.status,
+      ok: response.ok,
+      url,
+      headers: response.headers,
+      body: (response.body as ReadableStream<Uint8Array> | null) ?? null,
+      signal: request.signal,
+    };
   }
 
   private endpoint(path: string): string {

@@ -25,15 +25,19 @@ import type {
   ModelResponse,
   ModelUsage,
 } from './types.js';
-import { ModelProviderError } from './errors.js';
+import { ModelProviderError, isModelProviderError } from './errors.js';
 import { retry } from './retry.js';
 import type { RetryOptions, RetryPolicy } from './retry.js';
-import { withTimeout } from './timeout.js';
+import { withTimeout, withStreamTimeout } from './timeout.js';
 import { assertValidProviderConfig } from './validate.js';
 import { assertStructuredOutput, parseJsonContent } from './structured.js';
 import { HttpTransport } from './transport.js';
 import type { FetchFn } from './transport.js';
-import { isRecord } from './transport.js';
+import { isRecord, readStreamBody } from './transport.js';
+import { parseSse } from './sse.js';
+import type { SseRecord } from './sse.js';
+import type { ModelStream, ModelStreamEvent, StreamingModelProvider } from './streaming.js';
+import { withStreamingRetry } from './retry.js';
 
 export interface AnthropicProviderConfig {
   /** Default model id (e.g. "claude-sonnet-4-20250514"). */
@@ -143,10 +147,203 @@ export function toAnthropicMessages(
 }
 
 /**
+ * Per-content-block accumulator for Anthropic streaming. `content_block_start`
+ * opens a block, `content_block_delta` appends text / JSON fragments, and
+ * `content_block_stop` closes it (emitting a complete tool call when it was a
+ * `tool_use` block).
+ */
+interface AnthropicBlockState {
+  readonly type: 'text' | 'tool_use';
+  readonly id?: string;
+  readonly name?: string;
+  arguments: string;
+}
+
+/** Streaming correlation state spanning all records of one message. */
+interface AnthropicStreamState {
+  messageId?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  stopReason?: FinishReason;
+  sawContent: boolean;
+  usageEmitted: boolean;
+  finished: boolean;
+  blocks: Map<number, AnthropicBlockState>;
+}
+
+/**
+ * Vendor-local translation of a single Anthropic SSE record into normalized
+ * events. Mutates `state` so text/tool fragments correlate across records.
+ * Throws a normalized {@link ModelProviderError} for Anthropic's in-band
+ * error records.
+ */
+function translateAnthropicRecord(
+  record: SseRecord,
+  state: AnthropicStreamState,
+  sanctions: (message: string) => string,
+): ModelStreamEvent[] {
+  const events: ModelStreamEvent[] = [];
+  const data = record.data.trim();
+  if (data.length === 0) return events;
+
+  let json: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(data);
+    if (!isRecord(parsed)) throw new Error('record is not a JSON object');
+    json = parsed;
+  } catch {
+    throw new ModelProviderError(
+      `Malformed SSE chunk: ${sanctions(data.slice(0, 300))}`,
+      { provider: 'anthropic', code: 'PROVIDER_ERROR', retryable: false },
+    );
+  }
+
+  if (json.type === 'error') {
+    throw anthropicStreamError(json, sanctions);
+  }
+  if (json.type === 'ping') return events;
+
+  switch (json.type) {
+    case 'message_start': {
+      const message = isRecord(json.message) ? json.message : undefined;
+      if (typeof message?.id === 'string') state.messageId = message.id;
+      if (typeof message?.model === 'string') state.model = message.model;
+      const usage = isRecord(message?.usage) ? message.usage : undefined;
+      if (typeof usage?.input_tokens === 'number') {
+        state.inputTokens = usage.input_tokens;
+      }
+      break;
+    }
+    case 'content_block_start': {
+      const index = json.index;
+      const block = isRecord(json.content_block) ? json.content_block : undefined;
+      if (typeof index !== 'number' || block === undefined) break;
+      if (block.type === 'tool_use') {
+        state.blocks.set(index, {
+          type: 'tool_use',
+          id: typeof block.id === 'string' ? block.id : undefined,
+          name: typeof block.name === 'string' ? block.name : undefined,
+          arguments: '',
+        });
+      } else {
+        state.blocks.set(index, { type: 'text', arguments: '' });
+      }
+      break;
+    }
+    case 'content_block_delta': {
+      const index = json.index;
+      const delta = isRecord(json.delta) ? json.delta : undefined;
+      if (typeof index !== 'number' || delta === undefined) break;
+      if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+        if (delta.text.length > 0) {
+          state.sawContent = true;
+          events.push({ type: 'text_delta', text: delta.text });
+        }
+      } else if (
+        delta.type === 'input_json_delta' &&
+        typeof delta.partial_json === 'string'
+      ) {
+        const block = state.blocks.get(index);
+        if (block?.type === 'tool_use') {
+          block.arguments = block.arguments + delta.partial_json;
+          state.sawContent = true;
+        }
+      }
+      break;
+    }
+    case 'content_block_stop': {
+      const index = json.index;
+      if (typeof index !== 'number') break;
+      const block = state.blocks.get(index);
+      if (block?.type === 'tool_use') {
+        events.push({
+          type: 'tool_call',
+          id: block.id ?? `tool_${index}`,
+          name: block.name ?? 'unknown',
+          arguments: block.arguments,
+        });
+      }
+      state.blocks.delete(index);
+      break;
+    }
+    case 'message_delta': {
+      const delta = isRecord(json.delta) ? json.delta : undefined;
+      if (typeof delta?.stop_reason === 'string') {
+        state.stopReason = mapAnthropicStopReason(delta.stop_reason);
+      }
+      const usage = isRecord(json.usage) ? json.usage : undefined;
+      if (typeof usage?.output_tokens === 'number') {
+        state.outputTokens = usage.output_tokens;
+      }
+      if (!state.usageEmitted) {
+        state.usageEmitted = true;
+        const inputTokens = state.inputTokens;
+        const outputTokens = state.outputTokens;
+        const usageEvent: Extract<ModelStreamEvent, { type: 'usage' }> = {
+          type: 'usage',
+          provider: 'anthropic',
+          ...(inputTokens !== undefined ? { inputTokens } : {}),
+          ...(outputTokens !== undefined ? { outputTokens } : {}),
+          ...(inputTokens !== undefined && outputTokens !== undefined
+            ? { totalTokens: inputTokens + outputTokens }
+            : {}),
+        };
+        events.push(usageEvent);
+      }
+      break;
+    }
+    case 'message_stop':
+      state.finished = true;
+      break;
+    default:
+      break;
+  }
+
+  return events;
+}
+
+/** Normalize an Anthropic in-band stream error into a model provider error. */
+function anthropicStreamError(
+  json: Record<string, unknown>,
+  sanctions: (message: string) => string,
+): ModelProviderError {
+  const error = isRecord(json.error) ? json.error : undefined;
+  const type = typeof error?.type === 'string' ? error.type : '';
+  const rawMessage =
+    typeof error?.message === 'string'
+      ? error.message
+      : type !== ''
+        ? type
+        : 'unknown Anthropic stream error';
+  const message = sanctions(rawMessage.slice(0, 500));
+
+  if (/rate_limit/i.test(type)) {
+    return new ModelProviderError(`Provider stream error: ${message}`, {
+      provider: 'anthropic',
+      code: 'RATE_LIMITED',
+      retryable: true,
+    });
+  }
+  if (/invalid_request/i.test(type)) {
+    return new ModelProviderError(`Provider stream error: ${message}`, {
+      provider: 'anthropic',
+      code: 'INVALID_REQUEST',
+      retryable: false,
+    });
+  }
+  return new ModelProviderError(`Provider stream error: ${message}`, {
+    provider: 'anthropic',
+    code: 'PROVIDER_ERROR',
+    retryable: true,
+  });
+}
+
+/**
  * Adapter over Anthropic's Messages API.
  * All Anthropic-specific conversion is confined to this class.
  */
-export class AnthropicProvider extends BaseModelProvider {
+export class AnthropicProvider extends BaseModelProvider implements StreamingModelProvider {
   readonly id = PROVIDER_ID;
 
   private readonly transport: HttpTransport;
@@ -217,6 +414,113 @@ export class AnthropicProvider extends BaseModelProvider {
     const response = this.parseResponse(json);
     this.validateStructuredResponse(request, response.content);
     return response;
+  }
+
+  /** {@inheritDoc StreamingModelProvider.stream} */
+  stream(request: ModelRequest): ModelStream {
+    this.validateRequest(request);
+
+    const policy: RetryPolicy = {
+      maxRetries: this.retryPolicy?.maxRetries ?? 2,
+      ...this.retryPolicy,
+      ...(request.maxRetries !== undefined ? { maxRetries: request.maxRetries } : {}),
+    };
+
+    return withStreamingRetry(
+      () =>
+        withStreamTimeout(
+          (signal) => this.executeStream(request, signal),
+          {
+            timeoutMs: request.timeoutMs ?? this.timeoutMs,
+            signal: request.signal,
+            operation: 'stream',
+            provider: this.id,
+          },
+        ),
+      {
+        operation: 'stream',
+        provider: this.id,
+        policy,
+        signal: request.signal,
+        onRetry: this.onRetry,
+      },
+    );
+  }
+
+  /**
+   * Stream one attempt of the Anthropic Messages SSE response. All vendor
+   * event names and payload shapes are consumed by
+   * {@link translateAnthropicRecord}; only normalized {@link ModelStreamEvent}s
+   * exit this adapter. Structured requests are validated with the DF-026A
+   * validator before `completed` is allowed.
+   */
+  private async *executeStream(
+    request: ModelRequest,
+    signal: AbortSignal,
+  ): AsyncGenerator<ModelStreamEvent> {
+    const response = await this.transport.postStream({
+      path: MESSAGES_PATH,
+      body: this.buildStreamRequestBody(request),
+      signal,
+    });
+    if (!response.body) {
+      throw new ModelProviderError('Provider returned no stream body', {
+        provider: this.id,
+        code: 'PROVIDER_ERROR',
+        retryable: false,
+      });
+    }
+
+    const state: AnthropicStreamState = {
+      sawContent: false,
+      usageEmitted: false,
+      finished: false,
+      blocks: new Map(),
+    };
+    const sanctions = (value: string): string => this.transport.sanitize(value);
+    let textBuffer = '';
+
+    try {
+      for await (const record of parseSse(readStreamBody(response.body, signal))) {
+        for (const event of translateAnthropicRecord(record, state, sanctions)) {
+          if (event.type === 'text_delta') textBuffer += event.text;
+          yield event;
+        }
+      }
+    } catch (error) {
+      if (isModelProviderError(error)) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ModelProviderError(
+        `Failed reading provider stream: ${this.transport.sanitize(message)}`,
+        { provider: this.id, code: 'PROVIDER_ERROR', retryable: false },
+      );
+    }
+
+    if (!state.finished) {
+      throw new ModelProviderError(
+        'Provider stream ended before message_stop was received',
+        { provider: this.id, code: 'PROVIDER_ERROR', retryable: false },
+      );
+    }
+
+    if (request.responseFormat) {
+      this.validateStructuredResponse(request, textBuffer);
+    }
+
+    yield {
+      type: 'completed',
+      finishReason: state.stopReason,
+      id: state.messageId,
+      model: state.model,
+      provider: this.id,
+    };
+  }
+
+  /** Translate the normalized request into a streaming request body. */
+  private buildStreamRequestBody(request: ModelRequest): Record<string, unknown> {
+    const body = this.buildRequestBody(request);
+    body.stream = true;
+    return body;
   }
 
   /** Render the normalized structured-output request as a JSON instruction. */

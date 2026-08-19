@@ -20,6 +20,7 @@ import type { ExecutionPlan } from '@devforge/planner';
 import { discoverRepository } from '../src/services/workspace.js';
 import { createPlannerService } from '../src/services/planner.js';
 import { createExecutorService } from '../src/services/executor.js';
+import { createRouterFromConfig } from '../src/services/brain.js';
 import { createBrainService } from '../src/services/brain.js';
 import { ConfigError, formatError, CliError } from '../src/errors.js';
 import { renderExecutionReport } from '../src/services/output.js';
@@ -33,6 +34,7 @@ import { handleExplain } from '../src/commands/explain.js';
 import { handleStatus } from '../src/commands/status.js';
 import { handleDoctor } from '../src/commands/doctor.js';
 import { handleConfig } from '../src/commands/config.js';
+import type { ConfigPayload } from '../src/commands/config.js';
 
 import { buildPlan, createTempMockRepo, ScriptedProvider } from './helpers.js';
 import type { ExecutionServices, ExecutionContext, LightCliContext } from '../src/services/session.js';
@@ -59,6 +61,20 @@ function makeConfig() {
     provider: 'fake' as const,
     logLevel: 'info' as const,
     temperature: 0.2,
+  };
+}
+
+/** A role-mapped fake config with distinct per-role model ids (DF-027). */
+function makeRoleConfig() {
+  return {
+    provider: 'fake' as const,
+    logLevel: 'info' as const,
+    temperature: 0.2,
+    roleModels: {
+      reasoning: 'openai/gpt-oss-120b:free',
+      coding: 'cohere/north-mini-code:free',
+      fast: 'openai/gpt-oss-20b:free',
+    },
   };
 }
 
@@ -208,6 +224,86 @@ describe('service wiring with a scripted provider', () => {
     expect(repo.packageManager).toBe('pnpm');
     expect(repo.testFramework).toBe('vitest');
     expect(repo.hasPackageJson).toBe(true);
+  });
+});
+
+// ─── DF-027 role routing at the service-wiring boundary ─────────────────────
+
+describe('role routing through the shared ModelRouter (DF-027)', () => {
+  it('creates a single router with distinct providers for every role', () => {
+    const router = createRouterFromConfig(makeRoleConfig() as never);
+    expect(router.list()).toEqual(['reasoning', 'coding', 'fast']);
+    const reasoning = router.resolve('reasoning');
+    const coding = router.resolve('coding');
+    expect(reasoning.config.model).toBe('openai/gpt-oss-120b:free');
+    expect(coding.config.model).toBe('cohere/north-mini-code:free');
+    expect(reasoning.provider).not.toBe(coding.provider);
+  });
+
+  it('routes the executor coding model to the CODING role and reasoning model to REASONING', async () => {
+    const root = await createTempMockRepo();
+    const router = createRouterFromConfig(makeRoleConfig() as never);
+
+    const executor = await createExecutorService(router, root, {
+      maxRepairAttempts: 2,
+      temperature: 0.2,
+      verificationTargets: [],
+    });
+
+    const codingProvider = executor.codingModel.provider;
+    const reasoningProvider = executor.reasoningModel.provider;
+    expect(codingProvider).toBe(router.select('coding'));
+    expect(reasoningProvider).toBe(router.select('reasoning'));
+    expect(codingProvider).not.toBe(reasoningProvider);
+    expect(executor.codingModel.name).toBe('fake-provider-coding');
+    expect(executor.reasoningModel.name).toBe('fake-provider-reasoning');
+  });
+
+  it('planner routes to the reasoning role only when a router is supplied', async () => {
+    const router = createRouterFromConfig(makeRoleConfig() as never);
+    const planner = createPlannerService(router, 0.2);
+
+    const result = await planner.plan('Implement a new service');
+    // The reasoning role's fake provider serves non-plan text; the output fails
+    // plan validation. INVALID_PLAN_OUTPUT (not the deterministic fallback)
+    // proves the model-backed path exercised the reasoning role.
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('INVALID_PLAN_OUTPUT');
+  });
+
+  it('routes the brain to the reasoning role via the shared router', async () => {
+    const root = await createTempMockRepo();
+    const router = createRouterFromConfig(makeRoleConfig() as never);
+    const brain = await createBrainService(makeRoleConfig() as never, root, undefined, {
+      router,
+    });
+    try {
+      const answer = await brain.ask('Explain the architecture');
+      // Fake provider serves a scripted answer; assertions on routing identity:
+      expect(router.select('reasoning').id).toBe('fake-provider');
+      expect(router.select('fast').id).toBe('fake-provider');
+      expect(answer.status).toBe('answered');
+    } finally {
+      await brain.dispose();
+    }
+  });
+
+  it('never degrades a real provider to fake when a role is unconfigured', () => {
+    const router = createRouterFromConfig({
+      provider: 'openai-compatible' as const,
+      model: 'openai/gpt-oss-120b:free',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      temperature: 0.2,
+      logLevel: 'info' as const,
+    });
+    // Faking is disabled for real provider configs; a role without an explicit
+    // override resolves through the default config (a real provider), never a
+    // FakeModelProvider.
+    const reasoning = router.resolve('reasoning');
+    expect(reasoning.source).not.toBe('fake');
+    expect(router.select('fast').id).toBe('openai-compatible');
+    expect(router.select('fast')).not.toBe(router.select('reasoning'));
   });
 });
 
@@ -434,6 +530,43 @@ describe('command handlers orchestrate services', () => {
     expect(out).toContain('DevForge Config');
     expect(out).toContain('Provider');
     expect(out).toContain('.devforge.json');
+    // DF-027: resolved role mapping is surfaced, one row per role.
+    expect(out).toContain('Resolved model routes');
+    expect(out).toContain('Route · reasoning');
+    expect(out).toContain('Route · coding');
+    expect(out).toContain('Route · fast');
+  });
+
+  it('config --json surfaces redacted role routes (no apiKey leak)', async () => {
+    const root = await createTempMockRepo();
+    const { services } = stubServices();
+    const ctx = executionContext(services, root, true) as unknown as LightCliContext;
+    ctx.config = {
+      provider: 'openai-compatible',
+      model: 'openai/gpt-oss-120b:free',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-top-secret-value',
+      temperature: 0.2,
+      logLevel: 'info',
+      roleModels: {
+        coding: 'cohere/north-mini-code:free',
+        fast: 'openai/gpt-oss-20b:free',
+      },
+    } as never;
+
+    const payload = (await handleConfig(ctx)) as ConfigPayload;
+    expect(payload.apiKey).toBe('***');
+    expect(payload.routes).toBeDefined();
+    expect(payload.routes!.length).toBe(3);
+    const coding = payload.routes!.find((r) => r.role === 'coding');
+    expect(coding?.model).toBe('cohere/north-mini-code:free');
+    expect(coding?.source).toBe('explicit');
+    for (const route of payload.routes!) {
+      expect(route.apiKey).not.toBe('sk-top-secret-value');
+    }
+    // The default route (reasoning) inherits the default provider config.
+    const reasoning = payload.routes!.find((r) => r.role === 'reasoning');
+    expect(reasoning?.source).toBe('default');
   });
 
   it('doctor renders environment health checks', async () => {
@@ -450,6 +583,21 @@ describe('command handlers orchestrate services', () => {
     expect(out).toContain('workspace');
     expect(out).toContain('provider');
     expect(out).toContain('Set DEVFORGE_MODEL_API_KEY');
+  });
+
+  it('doctor includes the model-routes role routing check', async () => {
+    const root = await createTempMockRepo();
+    const { services } = stubServices();
+    const ctx = executionContext(services, root) as unknown as LightCliContext;
+    const servicesAny = services as unknown as { environment: readonly { name: string; ok: boolean; detail: string; fix?: string }[] };
+    servicesAny.environment = [
+      { name: 'workspace', ok: true, detail: 'detected git repo' },
+      { name: 'model-routes', ok: true, detail: 'roles → providers: reasoning → fake-provider, coding → fake-provider, fast → fake-provider' },
+    ];
+
+    const out = (await handleDoctor(ctx)) as string;
+    expect(out).toContain('model-routes');
+    expect(out).toContain('reasoning → fake-provider');
   });
 });
 

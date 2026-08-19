@@ -234,6 +234,7 @@ export class ModelRouter {
       apiKey: config.apiKey,
       timeoutMs: config.timeoutMs,
       maxRetries: config.maxRetries,
+      fakeResponse: config.fakeResponse,
     };
     return complete;
   }

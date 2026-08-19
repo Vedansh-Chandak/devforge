@@ -56,3 +56,23 @@ export function resolveModelRolesFor(
   const candidates = [mapping.modelRole, ...mapping.fallbacks];
   return candidates.filter(routerHas);
 }
+
+/** Minimal router surface the swarm wiring depends on (DF-027). */
+export interface ModelRouterLike {
+  readonly has: (modelRole: ModelSelectionRole) => boolean;
+  readonly select: (modelRole: ModelSelectionRole) => unknown;
+}
+
+/**
+ * Resolve the single best model role that powers an agent role against a
+ * configured {@link ModelRouterLike}. Returns `undefined` when no candidate
+ * role resolves. Consumers stay provider-agnostic: they route through the
+ * router's role contract and never name concrete provider adapters.
+ */
+export function resolveConfiguredModelRole(
+  role: AgentRole,
+  router: ModelRouterLike,
+): ModelSelectionRole | undefined {
+  const candidates = resolveModelRolesFor(role, (r) => router.has(r));
+  return candidates.length > 0 ? (candidates[0] as ModelSelectionRole) : undefined;
+}

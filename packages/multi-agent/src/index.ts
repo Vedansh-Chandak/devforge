@@ -110,8 +110,9 @@ export {
   ROLE_MODEL_MAP,
   modelRoleFor,
   resolveModelRolesFor,
+  resolveConfiguredModelRole,
 } from './roles/model-roles.js';
-export type { AgentRoleModelMapping } from './roles/model-roles.js';
+export type { AgentRoleModelMapping, ModelRouterLike } from './roles/model-roles.js';
 export { createCoderAgent, defaultCoderBackend, slug, fnName } from './roles/coder-agent.js';
 export {
   createReviewerAgent,

@@ -21,10 +21,10 @@ import type {
   ModelResponse,
   ModelUsage,
 } from './types.js';
-import { ModelProviderError } from './errors.js';
+import { ModelProviderError, isModelProviderError } from './errors.js';
 import { retry } from './retry.js';
 import type { RetryOptions, RetryPolicy } from './retry.js';
-import { withTimeout } from './timeout.js';
+import { withTimeout, withStreamTimeout } from './timeout.js';
 import { assertValidProviderConfig } from './validate.js';
 import { assertStructuredOutput, parseJsonContent } from './structured.js';
 import type { JsonPropertySchema, StructuredOutputSchema } from './structured.js';
@@ -35,6 +35,10 @@ import {
   HttpTransport,
 } from './transport.js';
 import type { FetchFn, HttpStatusClassification } from './transport.js';
+import { isRecord, readStreamBody } from './transport.js';
+import { parseSse } from './sse.js';
+import type { ModelStream, ModelStreamEvent, StreamingModelProvider } from './streaming.js';
+import { withStreamingRetry } from './retry.js';
 
 export interface GeminiProviderConfig {
   /** Default model id (e.g. "gemini-2.5-flash"). */
@@ -60,6 +64,8 @@ export interface GeminiProviderConfig {
 const PROVIDER_ID = 'gemini';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 const GENERATE_CONTENT_PATH = '/v1beta/models/:model:generateContent';
+const STREAM_GENERATE_CONTENT_PATH =
+  '/v1beta/models/:model:streamGenerateContent?alt=sse';
 
 /**
  * Gemini REST returns 400 for several auth-shaped defects (bad key, SDK
@@ -197,7 +203,7 @@ function toGeminiType(type: JsonPropertySchema['type']): string {
  * Adapter over Google's Gemini `generateContent` REST API.
  * All Gemini-specific conversion is confined to this class.
  */
-export class GeminiProvider extends BaseModelProvider {
+export class GeminiProvider extends BaseModelProvider implements StreamingModelProvider {
   readonly id = PROVIDER_ID;
 
   private readonly transport: HttpTransport;
@@ -268,6 +274,151 @@ export class GeminiProvider extends BaseModelProvider {
     const response = this.parseResponse(json);
     this.validateStructuredResponse(request, response.content);
     return response;
+  }
+
+  /** {@inheritDoc StreamingModelProvider.stream} */
+  stream(request: ModelRequest): ModelStream {
+    this.validateRequest(request);
+
+    const policy: RetryPolicy = {
+      maxRetries: this.retryPolicy?.maxRetries ?? 2,
+      ...this.retryPolicy,
+      ...(request.maxRetries !== undefined ? { maxRetries: request.maxRetries } : {}),
+    };
+
+    return withStreamingRetry(
+      () =>
+        withStreamTimeout(
+          (signal) => this.executeStream(request, signal),
+          {
+            timeoutMs: request.timeoutMs ?? this.timeoutMs,
+            signal: request.signal,
+            operation: 'stream',
+            provider: this.id,
+          },
+        ),
+      {
+        operation: 'stream',
+        provider: this.id,
+        policy,
+        signal: request.signal,
+        onRetry: this.onRetry,
+      },
+    );
+  }
+
+  /**
+   * Stream one attempt of the Gemini `streamGenerateContent` SSE response.
+   * Each SSE payload is a `GenerateContentResponse` blob normalized onto
+   * {@link ModelStreamEvent}: parts' text becomes `text_delta`, token counts
+   * become a single `usage` event, and the terminal `completed` is emitted
+   * only after a finish reason is observed. Structured requests are validated
+   * with the DF-026A validator before `completed` is allowed.
+   */
+  private async *executeStream(
+    request: ModelRequest,
+    signal: AbortSignal,
+  ): AsyncGenerator<ModelStreamEvent> {
+    const path = STREAM_GENERATE_CONTENT_PATH.replace(
+      ':model',
+      encodeURIComponent(request.model ?? this.model),
+    );
+    const response = await this.transport.postStream({
+      path,
+      body: this.buildRequestBody(request),
+      signal,
+    });
+    if (!response.body) {
+      throw this.providerStreamError('Provider returned no stream body');
+    }
+
+    let finishReason: FinishReason | undefined;
+    let model: string | undefined;
+    let usageEmitted = false;
+    let sawText = false;
+    let textBuffer = '';
+
+    try {
+      for await (const record of parseSse(readStreamBody(response.body, signal))) {
+        const data = record.data.trim();
+        if (data.length === 0) continue;
+
+        let blob: Record<string, unknown>;
+        try {
+          const parsed: unknown = JSON.parse(data);
+          if (!isRecord(parsed)) {
+            throw new Error('chunk is not a JSON object');
+          }
+          blob = parsed;
+        } catch {
+          const snippet = this.transport.sanitize(data.slice(0, 300));
+          throw this.providerStreamError(`Malformed SSE chunk: ${snippet}`);
+        }
+
+        if (typeof blob.modelVersion === 'string' && model === undefined) {
+          model = blob.modelVersion;
+        }
+        const usage = extractGeminiUsage(blob.usageMetadata);
+        if (usage !== undefined && !usageEmitted) {
+          usageEmitted = true;
+          yield { type: 'usage', ...usage, provider: this.id };
+        }
+
+        const candidates = Array.isArray(blob.candidates) ? blob.candidates : [];
+        for (const rawCandidate of candidates) {
+          if (!isRecord(rawCandidate)) continue;
+          if (
+            typeof rawCandidate.finishReason === 'string' &&
+            finishReason === undefined
+          ) {
+            finishReason = mapGeminiFinishReason(rawCandidate.finishReason);
+          }
+          const content = rawCandidate.content;
+          if (!isRecord(content) || !Array.isArray(content.parts)) continue;
+          for (const part of content.parts) {
+            if (!isRecord(part) || typeof part.text !== 'string') continue;
+            if (part.text.length > 0) {
+              sawText = true;
+              textBuffer += part.text;
+              yield { type: 'text_delta', text: part.text };
+            }
+          }
+        }
+      }
+    } catch (error) {
+      if (isModelProviderError(error)) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      throw this.providerStreamError(
+        `Failed reading provider stream: ${this.transport.sanitize(message)}`,
+      );
+    }
+
+    if (finishReason === undefined && !sawText) {
+      throw new ModelProviderError(
+        'Provider stream ended without content or completion',
+        { provider: this.id, code: 'PROVIDER_ERROR', retryable: false },
+      );
+    }
+
+    if (request.responseFormat) {
+      this.validateStructuredResponse(request, textBuffer);
+    }
+
+    yield {
+      type: 'completed',
+      finishReason,
+      id: undefined,
+      model,
+      provider: this.id,
+    };
+  }
+
+  private providerStreamError(message: string): ModelProviderError {
+    return new ModelProviderError(message, {
+      provider: this.id,
+      code: 'PROVIDER_ERROR',
+      retryable: false,
+    });
   }
 
   /** Translate the normalized request into the Gemini `generateContent` body. */

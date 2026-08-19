@@ -137,3 +137,128 @@ export function fastRetryPolicy(maxRetries = 2) {
     jitter: 0,
   };
 }
+
+// ────────────────────────────────────────────
+// Deterministic HTTP streaming fetch (DF-026D)
+// ────────────────────────────────────────────
+
+export interface StreamSource {
+  /** Raw SSE body fragments, enqueued one `Uint8Array` chunk at a time. */
+  readonly chunks?: readonly string[];
+  /** Convenience alias for a single chunk. */
+  readonly body?: string;
+  /** Non-OK HTTP status for this response. */
+  readonly status?: number;
+  /** Error JSON body for non-OK responses (read by `mapHttpError`). */
+  readonly jsonError?: unknown;
+  /** Delay (ms) between sequential chunks, enabling observable stalls. */
+  readonly intervalMs?: number;
+  /** After delivering `chunks[stallAfter]`, stall forever (never close). */
+  readonly stallAfter?: number;
+  /** Error the underlying stream after delivering this many chunks. */
+  readonly errorAfter?: number;
+  /** Invoked when the reader is cancelled (abort teardown). */
+  readonly onCancel?: () => void;
+}
+
+export interface StreamFetch {
+  fetchFn: ReturnType<typeof vi.fn>;
+  calls: Array<{ url: string; init?: RequestInit }>;
+  cancelled: Array<{ index: number; url: string }>;
+}
+
+/**
+ * Build a mocked `fetch` that returns SSE `Response` objects backed by a
+ * controllable `ReadableStream`. The first entry is consumed FIFO; the last
+ * entry repeats for subsequent calls (mirroring {@link createMockFetch}).
+ */
+export function createStreamFetch(
+  sources: readonly StreamSource[] | StreamSource = {},
+): StreamFetch {
+  const queue: StreamSource[] = Array.isArray(sources)
+    ? sources.length > 0
+      ? [...sources]
+      : [{}]
+    : [sources];
+  const calls: StreamFetch['calls'] = [];
+  const cancelled: StreamFetch['cancelled'] = [];
+
+  const fetchFn = vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+    calls.push({ url, init });
+    const source = queue.length > 1 ? queue.shift()! : queue[0]!;
+    const callIndex = calls.length - 1;
+    return buildStreamResponse(source, url, callIndex, cancelled);
+  });
+
+  return { fetchFn, calls, cancelled };
+}
+
+function buildStreamResponse(
+  source: StreamSource,
+  url: string,
+  callIndex: number,
+  cancelled: StreamFetch['cancelled'],
+): Response {
+  const status = source.status ?? 200;
+  const ok = status >= 200 && status < 300;
+  const encoder = new TextEncoder();
+
+  let body: ReadableStream<Uint8Array>;
+  if (!ok && source.jsonError !== undefined) {
+    const text = JSON.stringify(source.jsonError);
+    body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(text));
+        controller.close();
+      },
+    });
+  } else {
+    const chunks = source.chunks ?? (source.body !== undefined ? [source.body] : []);
+    body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        let index = 0;
+        const push = (): void => {
+          if (index < chunks.length) {
+            controller.enqueue(encoder.encode(chunks[index]!));
+            index += 1;
+            if (source.errorAfter !== undefined && index === source.errorAfter) {
+              // Defer so the already-enqueued chunks are delivered first.
+              setTimeout(
+                () => controller.error(new Error('stream connection reset')),
+                0,
+              );
+              return;
+            }
+            if (source.stallAfter !== undefined && index > source.stallAfter) {
+              return;
+            }
+            if (source.intervalMs !== undefined && source.intervalMs > 0) {
+              setTimeout(push, source.intervalMs);
+            } else {
+              push();
+            }
+          } else {
+            controller.close();
+          }
+        };
+        push();
+      },
+      cancel() {
+        cancelled.push({ index: callIndex, url });
+        source.onCancel?.();
+      },
+    });
+  }
+
+  return new Response(body, {
+    status,
+    headers: {
+      'content-type': ok ? 'text/event-stream' : 'application/json',
+    },
+  });
+}
+
+/** Serialize a single SSE frame (optionally with an `event:` name). */
+export function sseFrame(data: string, event?: string): string {
+  return (event !== undefined ? `event: ${event}\n` : '') + `data: ${data}\n\n`;
+}

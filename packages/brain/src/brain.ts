@@ -2,6 +2,7 @@ import { logger } from '@devforge/logger';
 import { PromptComposer } from '@devforge/prompt-composer';
 import type { ComposerContext } from '@devforge/prompt-composer';
 import type { ToolRegistry, ToolExecutionContext } from '@devforge/tools';
+import type { ModelSelectionRole } from '@devforge/model-provider';
 import { ReasoningLoop } from './reasoning/index.js';
 import { classifyIntent } from './intent.js';
 import { buildContextFromMetadata } from './context-builder.js';
@@ -46,6 +47,7 @@ export class DevForgeBrain {
   private runtime: RuntimeInterface;
   private provider: ModelProviderInterface | undefined;
   private router: ModelRouterInterface | undefined;
+  private askRole: ModelSelectionRole;
   private state: BrainState;
   private composer: PromptComposer;
   private toolExecutionConfig: BrainToolExecutionConfig | undefined;
@@ -62,6 +64,7 @@ export class DevForgeBrain {
     this.runtime = config.runtime;
     this.provider = config.provider;
     this.router = config.router;
+    this.askRole = config.role ?? 'reasoning';
     this.state = { initialized: false };
     this.composer = new PromptComposer({
       maxContextChars: config.maxContextChars,
@@ -299,14 +302,20 @@ export class DevForgeBrain {
   }
 
   /**
-   * Resolve the generation provider: explicit `provider` wins; otherwise a
-   * configured `router` resolves the `reasoning` role. Both absent returns
-   * `undefined` (the brain returns a classified-only result).
+   * Resolve the generation provider (DF-027 role routing). An explicit
+   * `provider` wins for backward compatibility. Otherwise the configured
+   * `router` resolves the brain's `role` (`reasoning` by default). When the
+   * requested role is `reasoning` and it is not configured but `fast` is,
+   * the fast role is used — the brain can serve lightweight operations from
+   * a fast model. No provider-compatible fallback to `fake` is ever made:
+   * both absent returns `undefined` (classified-only result).
    */
   private resolveProvider(): ModelProviderInterface | undefined {
     if (this.provider) return this.provider;
-    if (this.router && this.router.has('reasoning')) {
-      return this.router.select('reasoning');
+    if (!this.router) return undefined;
+    if (this.router.has(this.askRole)) return this.router.select(this.askRole);
+    if (this.askRole === 'reasoning' && this.router.has('fast')) {
+      return this.router.select('fast');
     }
     return undefined;
   }
