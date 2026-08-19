@@ -90,6 +90,10 @@ function stubServices() {
     planner: {} as never,
     plan: vi.fn().mockResolvedValue({ ok: true, plan: buildPlan() }),
   };
+  const reasoningProvider = {
+    id: 'scripted-reasoning',
+    generate: vi.fn().mockRejectedValue(new Error('provider unavailable')),
+  };
   const executor = {
     executor: {} as never,
     codingEngine: { run: vi.fn() },
@@ -97,7 +101,7 @@ function stubServices() {
     runner: { run: vi.fn() },
     git: { diff: vi.fn(), changedFiles: vi.fn() },
     codingModel: {} as never,
-    reasoningModel: {} as never,
+    reasoningModel: { provider: reasoningProvider },
     executePlan: vi.fn(),
     fix: vi.fn(),
   };
@@ -110,7 +114,7 @@ function stubServices() {
     planner: planner as unknown as ExecutionServices['planner'],
     executor: executor as unknown as ExecutionServices['executor'],
   };
-  return { services, brain, planner, executor };
+  return { services, brain, planner, executor, reasoningProvider };
 }
 
 function executionContext(services: ExecutionServices, root: string, json = false): ExecutionContext {
@@ -182,6 +186,42 @@ describe('service wiring with a scripted provider', () => {
     } finally {
       await brain.dispose();
     }
+  });
+
+  it('executor runs a plan with multiple mutating steps (fresh coding engine per step)', async () => {
+    const root = await createTempMockRepo({ git: true });
+    // Respond with a valid (empty) patch set so the coding engine's patch
+    // generation always succeeds; verification with no targets short-circuits.
+    const provider = new ScriptedProvider(() => ({
+      content: '<DEVFORGE_PATCH>\n[]\n</DEVFORGE_PATCH>',
+      model: 'scripted-patches',
+      finishReason: 'stop',
+    }));
+    const executor = await createExecutorService(provider, root, {
+      maxRepairAttempts: 2,
+      temperature: 0.2,
+      verificationTargets: [],
+    });
+
+    // Two EDIT steps, no mode switch in between — the previous shared
+    // single-use coding engine would throw 'Engine already finished' on the
+    // second one (DF-028).
+    const plan: ExecutionPlan = {
+      goal: 'two edits',
+      summary: 'Plan — 2 EDIT steps',
+      complexity: 'LOW',
+      risk: 'LOW',
+      requiresConfirmation: false,
+      assumptions: [],
+      expectedOutputs: ['A validated plan'],
+      steps: [
+        { id: 'edit-1', title: 'First edit', description: 'First edit', type: 'EDIT', dependsOn: [], estimatedCost: 1, requiresConfirmation: false },
+        { id: 'edit-2', title: 'Second edit', description: 'Second edit', type: 'EDIT', dependsOn: ['edit-1'], estimatedCost: 1, requiresConfirmation: false },
+      ],
+    };
+
+    const report = await executor.executePlan(plan, { signal: new AbortController().signal });
+    expect(report.status).toBe('COMPLETED');
   });
 
   it('executor runs a plan and emits progress/execution events in a temp git repo', async () => {
@@ -366,7 +406,53 @@ describe('command handlers orchestrate services', () => {
     expect((result as { status?: string }).status).toBe('COMPLETED');
   });
 
-  it('review invokes GitService and the coding engine', async () => {
+  it('review is read-only: invokes the reasoning provider, never the coding engine', async () => {
+    const root = await createTempMockRepo();
+    const { services, executor, reasoningProvider } = stubServices();
+    const diff: GitDiff = {
+      empty: false,
+      text: 'diff --git a/src/index.ts b/src/index.ts',
+      files: [
+        {
+          oldPath: 'src/index.ts',
+          newPath: 'src/index.ts',
+          status: 'modified',
+          isBinary: false,
+          headerLines: ['diff --git a/src/index.ts b/src/index.ts', 'index 000..111', '--- a/src/index.ts', '+++ b/src/index.ts'],
+          hunks: [
+            {
+              header: '@@ -1,3 +1,4 @@',
+              oldStart: 1,
+              oldLines: 3,
+              newStart: 1,
+              newLines: 4,
+              lines: [
+                { kind: 'context', content: 'export function double(value: number): number {' },
+                { kind: 'addition', content: 'console.log("hello");' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    executor.git.diff.mockResolvedValue(diff);
+    executor.git.changedFiles.mockResolvedValue(['src/index.ts']);
+    reasoningProvider.generate.mockResolvedValue({
+      content: '<DEVFORGE_REASONING>{"findings":[{"category":"performance","file":"src/index.ts","line":2,"message":"N+1 query risk","severity":"warning"}],"summary":"Minor performance concern"}</DEVFORGE_REASONING>',
+      model: 'scripted',
+    });
+
+    const out = (await handleReview(executionContext(services, root))) as string;
+
+    expect(executor.git.diff).toHaveBeenCalled();
+    expect(executor.git.changedFiles).toHaveBeenCalled();
+    expect(reasoningProvider.generate).toHaveBeenCalled();
+    expect(executor.codingEngine.run).not.toHaveBeenCalled();
+    expect(out).toContain('Code Review');
+    expect(out).toContain('N+1 query risk');
+  });
+
+  it('review falls back to the deterministic structured review when the provider fails', async () => {
     const root = await createTempMockRepo();
     const { services, executor } = stubServices();
     const diff: GitDiff = {
@@ -397,26 +483,14 @@ describe('command handlers orchestrate services', () => {
     };
     executor.git.diff.mockResolvedValue(diff);
     executor.git.changedFiles.mockResolvedValue(['src/index.ts']);
-    executor.codingEngine.run.mockResolvedValue({
-      outcome: 'SUCCESS',
-      transactions: [{ order: 1, kind: 'initial', patchesApplied: 0, status: 'COMMITTED' }],
-      patchesGenerated: 0,
-      patchCalls: 1,
-      repairAttempts: 0,
-      modelCalls: 1,
-      verificationRuns: 0,
-      diagnostics: [],
-      rollbackCount: 0,
-      events: [],
-      executionTimeMs: 5,
-    });
 
     const out = (await handleReview(executionContext(services, root))) as string;
 
     expect(executor.git.diff).toHaveBeenCalled();
     expect(executor.git.changedFiles).toHaveBeenCalled();
-    expect(executor.codingEngine.run).toHaveBeenCalled();
+    expect(executor.codingEngine.run).not.toHaveBeenCalled();
     expect(out).toContain('Code Review');
+    expect(out).toContain('Console logging in production code');
   });
 
   it('review reports no pending changes when the tree is clean', async () => {

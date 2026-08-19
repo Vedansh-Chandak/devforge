@@ -10,6 +10,7 @@ import type { FailureAnalysis, RepairDecision } from '../executor/reasoning-mode
 import type { ParseResult, ParseFailure, ParseErrorCode } from './types.js';
 import { ReasoningParseError } from './errors.js';
 import { OUTPUT_TAGS } from './prompt-builder.js';
+import { redactSecrets } from '@devforge/model-provider';
 
 /** Category values for failure analysis. */
 const ANALYSIS_CATEGORIES = ['TYPE_ERROR', 'TEST_FAILURE', 'LINT_ERROR', 'COMMAND_ERROR', 'OTHER'] as const;
@@ -241,7 +242,14 @@ function createParseFailure(
   recoveryAttempted: boolean,
   partialValue?: unknown,
 ): ParseFailure {
-  return { code, message, rawOutput, recoveryAttempted, partialValue };
+  return {
+    code,
+    message: redactSecrets(message),
+    rawOutput: redactSecrets(rawOutput),
+    recoveryAttempted,
+    partialValue:
+      partialValue !== undefined ? redactSecrets(JSON.stringify(partialValue)) : undefined,
+  };
 }
 
 /** Return an error ParseResult. */

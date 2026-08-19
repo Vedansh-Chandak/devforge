@@ -10,6 +10,7 @@ import type { CodePatch, CodePatchOperation } from '../executor/patch-model.js';
 import type { ParseResult, ParseFailure, ParseErrorCode } from './types.js';
 import { PatchParseError, ParseError } from './errors.js';
 import { OUTPUT_TAGS } from './prompt-builder.js';
+import { redactSecrets } from '@devforge/model-provider';
 
 /** Result of extracting JSON from output. */
 interface ExtractedJson {
@@ -350,5 +351,12 @@ function createParseFailure(
   recoveryAttempted: boolean,
   partialValue?: unknown,
 ): ParseFailure {
-  return { code, message, rawOutput, recoveryAttempted, partialValue };
+  return {
+    code,
+    message: redactSecrets(message),
+    rawOutput: redactSecrets(rawOutput),
+    recoveryAttempted,
+    partialValue:
+      partialValue !== undefined ? redactSecrets(JSON.stringify(partialValue)) : undefined,
+  };
 }

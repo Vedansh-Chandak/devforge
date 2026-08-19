@@ -78,6 +78,13 @@ describe('devforge CLI end-to-end smoke tests', () => {
     expect(stdout).toContain('node');
   });
 
+  it('devforge doctor --models runs the opt-in model smoke offline under the fake provider', async () => {
+    const { code, stdout } = await runCli(['doctor', '--models']);
+    expect(code).toBe(0);
+    expect(stdout).toContain('model:reasoning');
+    expect(stdout).toContain('usage:');
+  });
+
   it('devforge plan degrades gracefully under the fake provider', async () => {
     const { code, stdout } = await runCli(['plan', 'Refactor the module']);
     expect(code).toBe(0);

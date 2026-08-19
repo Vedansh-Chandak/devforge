@@ -172,6 +172,14 @@ export function redactSecretText(value: string): string {
     /\b(API[-_ ]?KEY|AUTHORIZATION|X-API-KEY|X-AUTH-TOKEN)\s*[:=]\s*("[^"]*"|\S+)/gi,
     (_match, header: string) => `${header}=[REDACTED]`,
   );
+  // Known vendor API-key shapes (sk-, sk-ant-, AIza…, gsk_, xai-). Every
+  // dialect of key that DevForge supports must be masked here so a single,
+  // central primitive covers all diagnostics (DF-028).
+  output = output.replace(/\bsk-ant-[a-zA-Z0-9_-]{8,}\b/gi, "[REDACTED]");
+  output = output.replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]");
+  output = output.replace(/\bAIza[0-9A-Za-z_\-]{30,}\b/g, "[REDACTED]");
+  output = output.replace(/\bgsk_[a-zA-Z0-9]{8,}\b/g, "[REDACTED]");
+  output = output.replace(/\bxai-[a-zA-Z0-9_-]{8,}\b/gi, "[REDACTED]");
   output = output.replace(
     /-----BEGIN ([A-Z ]*)PRIVATE KEY-----[\s\S]*?-----END \1PRIVATE KEY-----/g,
     "-----BEGIN PRIVATE KEY-----\n[REDACTED]\n-----END PRIVATE KEY-----",

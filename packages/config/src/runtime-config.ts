@@ -241,6 +241,11 @@ export function redactRuntimeConfig(config: RuntimeConfig): RuntimeConfig {
 export function redactSecrets(text: string): string {
   return text
     .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "***")
+    .replace(/\bsk-ant-[a-zA-Z0-9_-]{8,}\b/gi, "***")
+    .replace(/\bAIza[0-9A-Za-z_\-]{30,}\b/g, "***")
+    .replace(/\bgsk_[a-zA-Z0-9]{8,}\b/g, "***")
+    .replace(/\bxai-[a-zA-Z0-9_-]{8,}\b/gi, "***")
     .replace(/\bauthorization:\s*[^\s]+/gi, "authorization: ***")
-    .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+=*/gi, "bearer ***");
+    .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+=*/gi, "bearer ***")
+    .replace(/api[_-]?key["']?\s*[:=]\s*["']?[A-Za-z0-9_-]{12,}["']?/gi, "apiKey=***");
 }

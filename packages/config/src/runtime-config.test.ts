@@ -191,4 +191,26 @@ describe("redactSecrets", () => {
     expect(redacted).not.toContain("eyJhbGciOiJIUzI1NiJ9.test");
     expect(redacted).toContain("keep-this");
   });
+
+  it("masks Anthropic, Gemini, Groq and xAI key shapes", () => {
+    const text = [
+      "sk-ant-api03-abcdef123456789012345678901234567890",
+      "AIzaSyD1234567890abcdefghijklmnopqrstuvwxyz123456789",
+      "gsk_AbCdEfGh12345678",
+      "xai-abcdef1234567890abcdef",
+      "keep-me-plain",
+    ].join(" ");
+    const redacted = redactSecrets(text);
+    expect(redacted).not.toContain("sk-ant-api03");
+    expect(redacted).not.toContain("AIzaSyD");
+    expect(redacted).not.toContain("gsk_AbCdEfGh");
+    expect(redacted).not.toContain("xai-abcdef");
+    expect(redacted).toContain("keep-me-plain");
+  });
+
+  it("masks api key assignments", () => {
+    const text = 'headers={"apiKey":"secretvalue123456","x-foo":1}';
+    const redacted = redactSecrets(text);
+    expect(redacted).not.toContain("secretvalue123456");
+  });
 });

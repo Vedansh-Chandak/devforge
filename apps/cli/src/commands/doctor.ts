@@ -8,6 +8,7 @@
 import { execSync } from 'node:child_process';
 import type { LightCliContext } from '../services/session.js';
 import { color } from '../services/output.js';
+import { runModelSmoke } from '../services/model-smoke.js';
 
 export interface HealthCheck {
   readonly name: string;
@@ -104,9 +105,21 @@ export function runHealthChecks(ctx: LightCliContext): {
   };
 }
 
-/** Handler for `devforge doctor`. */
-export async function handleDoctor(ctx: LightCliContext): Promise<string | { checks: readonly HealthCheck[]; allOk: boolean }> {
-  const { checks, allOk } = runHealthChecks(ctx);
+/**
+ * Handler for `devforge doctor`.
+ *
+ * @param modelsWhen enabling `--models`, performs an opt-in live smoke test of
+ *   every configured model route (never runs by default / in CI / offline).
+ */
+export async function handleDoctor(
+  ctx: LightCliContext,
+  models = false,
+): Promise<string | { checks: readonly HealthCheck[]; allOk: boolean }> {
+  const base = runHealthChecks(ctx);
+  const checks = models
+    ? [...base.checks, ...(await runModelSmoke(ctx.config, { signal: ctx.signal }))]
+    : base.checks;
+  const allOk = checks.every((c) => c.ok);
 
   if (ctx.options.json) {
     return { checks, allOk };

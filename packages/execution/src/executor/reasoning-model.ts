@@ -42,6 +42,8 @@ export interface FailureAnalysisInput {
   readonly diagnostics: Diagnostics;
   /** Current repair attempt number (1-indexed). */
   readonly attempt: number;
+  /** Optional abort signal to cancel the provider call (DF-028). */
+  readonly signal?: AbortSignal;
 }
 
 /** Input to decideRepair. */
@@ -54,6 +56,8 @@ export interface RepairDecisionInput {
   readonly analysis: FailureAnalysis;
   /** Current repair attempt number (1-indexed). */
   readonly attempt: number;
+  /** Optional abort signal to cancel the provider call (DF-028). */
+  readonly signal?: AbortSignal;
 }
 
 /** ReasoningModel interface — injectable for different providers. */
