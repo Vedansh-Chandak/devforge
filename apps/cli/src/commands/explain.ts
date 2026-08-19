@@ -7,9 +7,6 @@
 
 import type { ExecutionContext } from '../services/session.js';
 import { DevForgeRuntime } from '@devforge/runtime';
-import { DevForgeBrain } from '@devforge/brain';
-import type { ModelProvider } from '@devforge/model-provider';
-import { FakeModelProvider } from '@devforge/model-provider';
 import type { RepositoryTree } from '@devforge/repository-indexer';
 import type { SymbolGraph, ParsedFile } from '@devforge/symbol-graph';
 import type { KnowledgeGraph } from '@devforge/knowledge-graph';

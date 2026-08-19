@@ -178,3 +178,61 @@ export async function retry<T>(
     }
   }
 }
+
+/**
+ * Streaming counterpart of {@link retry} with the DF-026D retry semantics.
+ *
+ * `source(attempt)` produces the events for a single attempt. Behavioral
+ * contract (documented in the stop-condition report):
+ *
+ *  - Before the first event of an attempt is yielded, retryable failures
+ *    follow the existing retry policy (same classification/backoff/cancellation
+ *    rules as {@link retry}).
+ *  - Once the attempt has emitted any event, the attempt is NOT retried: the
+ *    failure is rethrown as-is. Already-emitted tokens are never duplicated.
+ *  - Abort before the stream starts, or during a backoff wait → `CANCELLED`.
+ *  - After a successful attempt the stream terminates cleanly.
+ */
+export async function* withStreamingRetry<T>(
+  source: (attempt: number) => AsyncIterable<T>,
+  options: RetryOptions,
+): AsyncGenerator<T> {
+  const policy = normalizePolicy(options.policy);
+  const sleep =
+    options.sleep ??
+    ((ms: number, signal?: AbortSignal) =>
+      defaultSleep(ms, signal, options.provider, options.operation));
+  const random = options.random ?? Math.random;
+
+  if (options.signal?.aborted) {
+    throw new ModelProviderError(
+      `Operation '${options.operation}' cancelled before it started`,
+      { provider: options.provider, code: 'CANCELLED', retryable: false },
+    );
+  }
+
+  let attempt = 0;
+  for (;;) {
+    let emitted = 0;
+    try {
+      for await (const value of source(attempt)) {
+        emitted += 1;
+        yield value;
+      }
+      return;
+    } catch (error) {
+      if (emitted === 0 && shouldRetry(error, attempt, policy)) {
+        const delayMs = computeBackoff(attempt, policy, random);
+        options.onRetry?.({
+          attempt,
+          error: error as ModelProviderError,
+          delayMs,
+        });
+        await sleep(delayMs, options.signal);
+        attempt += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
+}

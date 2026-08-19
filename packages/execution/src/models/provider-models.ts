@@ -8,7 +8,7 @@
  */
 
 import type { ModelProvider } from '@devforge/model-provider';
-import { ModelProviderError, isModelProviderError } from '@devforge/model-provider';
+import { ModelProviderError, isModelProviderError, redactSecrets } from '@devforge/model-provider';
 import type { CodePatch } from '../executor/patch-model.js';
 import type { CodingModel, CodingModelRequest } from '../executor/coding-model.js';
 import type { ReasoningModel, FailureAnalysis, RepairDecision, FailureAnalysisInput, RepairDecisionInput } from '../executor/reasoning-model.js';
@@ -63,6 +63,7 @@ export class ProviderCodingModel implements CodingModel {
       messages,
       temperature: this.settings.temperature ?? DEFAULT_SETTINGS.temperature,
       maxTokens: this.settings.maxTokens ?? DEFAULT_SETTINGS.maxTokens,
+      signal: input.signal,
     };
 
     let response;
@@ -105,6 +106,7 @@ export class ProviderReasoningModel implements ReasoningModel {
       messages,
       temperature: this.settings.temperature ?? DEFAULT_SETTINGS.temperature,
       maxTokens: this.settings.maxTokens ?? DEFAULT_SETTINGS.maxTokens,
+      signal: input.signal,
     };
 
     let response;
@@ -131,6 +133,7 @@ export class ProviderReasoningModel implements ReasoningModel {
       messages,
       temperature: this.settings.temperature ?? DEFAULT_SETTINGS.temperature,
       maxTokens: this.settings.maxTokens ?? DEFAULT_SETTINGS.maxTokens,
+      signal: input.signal,
     };
 
     let response;
@@ -157,19 +160,30 @@ function translateProviderError(
   error: unknown,
   Ctor: typeof CodingModelError | typeof ReasoningError,
 ): Error {
+  const safeMessage = (message: string): string => redactSecrets(message);
+  const cause = sanitizedCause(error);
   if (error instanceof ModelProviderError) {
     if (error.retryable || error.code === 'RATE_LIMITED' || error.code === 'TIMEOUT' || error.code === 'NETWORK_ERROR') {
-      return new Ctor(`Provider error (retryable): ${error.message}`, {
-        cause: error,
+      return new Ctor(`Provider error (retryable): ${safeMessage(error.message)}`, {
+        cause,
       });
     }
-    return new Ctor(`Provider error: ${error.message}`, { cause: error });
+    return new Ctor(`Provider error: ${safeMessage(error.message)}`, { cause });
   }
   if (isModelProviderError(error)) {
-    return new Ctor(`Provider error: ${error.message}`, { cause: error });
+    return new Ctor(`Provider error: ${safeMessage(error.message)}`, { cause });
   }
   if (error instanceof Error) {
-    return new Ctor(`Model call failed: ${error.message}`, { cause: error });
+    return new Ctor(`Model call failed: ${safeMessage(error.message)}`, { cause });
   }
-  return new Ctor(`Model call failed: ${String(error)}`);
+  return new Ctor(`Model call failed: ${safeMessage(String(error))}`);
+}
+
+/** Redacted clone of an upstream error so secrets never ride in `cause`. */
+function sanitizedCause(error: unknown): unknown {
+  if (!(error instanceof Error)) return error;
+  const message = redactSecrets(error.message);
+  const clone = new Error(message);
+  clone.name = error.name;
+  return clone;
 }

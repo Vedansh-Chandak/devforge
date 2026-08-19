@@ -22,7 +22,10 @@ export type { ModelErrorCode } from './errors.js';
 export { BaseModelProvider } from './provider.js';
 
 export { FakeModelProvider } from './testing/fake-provider.js';
-export type { FakeProviderConfig } from './testing/fake-provider.js';
+export type {
+  FakeProviderConfig,
+  FakeProviderStreamConfig,
+} from './testing/fake-provider.js';
 
 export { OpenAICompatibleProvider } from './openai-compatible.js';
 export type {
@@ -97,6 +100,8 @@ export {
   extractErrorMessage,
   extractErrorStatus,
   mapFetchFailure,
+  raceAgainstSignal,
+  readStreamBody,
 } from './transport.js';
 export type {
   FetchFn as TransportFetchFn,
@@ -104,7 +109,23 @@ export type {
   TransportConfig,
   TransportRequest,
   HttpStatusClassification,
+  HttpStreamResponse,
 } from './transport.js';
+
+export {
+  isStreamingModelProvider,
+  collectStream,
+  streamedText,
+} from './streaming.js';
+export type {
+  ModelStream,
+  ModelStreamEvent,
+  ModelStreamEventType,
+  StreamingModelProvider,
+} from './streaming.js';
+
+export { parseSse } from './sse.js';
+export type { SseRecord } from './sse.js';
 
 export { selectModel, selectModelName, resolveRoleModel } from './selection.js';
 export type { ModelSelection, RoleModelMap } from './selection.js';
@@ -117,10 +138,11 @@ export {
   normalizePolicy,
   computeBackoff,
   defaultSleep,
+  withStreamingRetry,
 } from './retry.js';
 export type { RetryPolicy, RetryOptions, NormalizedRetryPolicy } from './retry.js';
 
-export { withTimeout } from './timeout.js';
+export { withTimeout, withStreamTimeout } from './timeout.js';
 export type { TimeoutOptions } from './timeout.js';
 
 export { redactSecretText, redactSecrets, MIN_SECRET_LENGTH } from './redact.js';

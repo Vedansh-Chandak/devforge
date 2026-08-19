@@ -102,3 +102,76 @@ export function withTimeout<T>(
       );
   });
 }
+
+/**
+ * Streaming counterpart of {@link withTimeout}.
+ *
+ * Drives a generator-based stream (`source`) behind an internal deadline and
+ * an optional external cancellation signal. Exactly like {@link withTimeout}:
+ *
+ *  - internal timeout elapsed → `TIMEOUT`, retryable `true`
+ *  - external signal aborted → `CANCELLED`, retryable `false`
+ *  - `timeoutMs <= 0` disables the deadline while still honouring cancellation
+ *
+ * The winner suppresses the loser, and whichever fires first aborts the
+ * internal signal so the underlying transport tears the request down. Events
+ * are never yielded after the outcome is decided ("no events after
+ * cancellation"), and the source's own errors are passed through untouched
+ * when no outcome has been decided yet.
+ */
+export async function* withStreamTimeout<T>(
+  source: (signal: AbortSignal) => AsyncIterable<T>,
+  options: TimeoutOptions,
+): AsyncGenerator<T> {
+  const { timeoutMs, signal } = options;
+  const operation = options.operation ?? 'operation';
+  const provider = options.provider ?? 'unknown';
+
+  const timeoutError = new ModelProviderError(
+    `Operation '${operation}' timed out after ${timeoutMs}ms`,
+    { provider, code: 'TIMEOUT', retryable: true },
+  );
+  const cancelledError = new ModelProviderError(
+    `Operation '${operation}' cancelled`,
+    { provider, code: 'CANCELLED', retryable: false },
+  );
+
+  if (signal?.aborted) {
+    throw cancelledError;
+  }
+
+  const controller = new AbortController();
+  let outcome: ModelProviderError | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const onExternalAbort = (): void => {
+    if (outcome) return;
+    outcome = cancelledError;
+    controller.abort();
+  };
+
+  if (signal) {
+    signal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => {
+      if (outcome) return;
+      outcome = timeoutError;
+      controller.abort();
+    }, timeoutMs);
+  }
+
+  try {
+    for await (const value of source(controller.signal)) {
+      if (outcome) throw outcome;
+      yield value;
+    }
+    if (outcome) throw outcome;
+  } catch (error) {
+    if (outcome) throw outcome;
+    throw error;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', onExternalAbort);
+  }
+}

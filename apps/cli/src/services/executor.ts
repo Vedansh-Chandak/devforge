@@ -79,12 +79,16 @@ export interface ExecutorService {
  * - VERIFY: uses built-in runVerification
  * - SEARCH/READ/ANALYZE/PLAN: read-only handlers that produce context
  * - EDIT/CREATE/DELETE: mutating handlers that delegate to the coding engine
+ *
+ * The coding engine is single-use (a freshly built instance owns one run and
+ * its event/report lifecycle). Because a plan can contain multiple mutating
+ * steps, each step builds its own engine via `buildCodingEngine()` (DF-028).
  */
 function createStepHandlers(
   workspace: WorkspaceClass,
   runner: CommandRunner,
   git: GitService,
-  codingEngine: AutonomousCodingEngine,
+  buildCodingEngine: () => AutonomousCodingEngine,
 ): Partial<Record<PlanStepType, StepHandler>> {
   const handlers: Partial<Record<PlanStepType, StepHandler>> = {};
 
@@ -99,14 +103,14 @@ function createStepHandlers(
     handlers[type] = readOnlyHandler;
   }
 
-  // Mutating steps: delegate to coding engine
+  // Mutating steps: delegate to a fresh coding engine per step
   const mutatingHandler: StepHandler = async (ctx): Promise<StepResult> => {
     const { step } = ctx;
     logger.debug('Executing mutating step via coding engine', { step: step.id, type: step.type });
 
     // Use the step's title/description as the goal for the coding engine
     const goal = `${step.title}. ${step.description ?? ''}`.trim();
-    const report = await codingEngine.run({ goal, context: [] });
+    const report = await buildCodingEngine().run({ goal, context: [] });
 
     return {
       ok: report.outcome === 'SUCCESS',
@@ -205,23 +209,28 @@ export async function createExecutorService(
     settings: { temperature: config.temperature },
   });
 
-  // Patch engine and coding engine
+  // Patch engine and coding engine.
+  // The `AutonomousCodingEngine` is single-use: it owns one run and its
+  // event/report lifecycle, so a shared instance cannot back multiple mutating
+  // steps. `buildCodingEngine` produces a fresh engine per mutating step and
+  // per `fix()` invocation (DF-028).
   const patchEngine = createPatchEngine({ model: codingModel });
   const verificationTargets = config.verificationTargets ?? defaultVerificationTargets(repoRoot);
 
-  const codingEngine = createCodingEngine({
-    workspace,
-    runner,
-    patchEngine,
-    codingModel,
-    reasoningModel,
-    verificationTargets,
-    cwd: repoRoot,
-    signal,
-    budgets: {
-      maxRepairAttempts: config.maxRepairAttempts,
-    },
-  });
+  const buildCodingEngine = (): AutonomousCodingEngine =>
+    createCodingEngine({
+      workspace,
+      runner,
+      patchEngine,
+      codingModel,
+      reasoningModel,
+      verificationTargets,
+      cwd: repoRoot,
+      signal,
+      budgets: {
+        maxRepairAttempts: config.maxRepairAttempts,
+      },
+    });
 
   // Executor with step handlers
   const executor = createExecutor({
@@ -229,7 +238,7 @@ export async function createExecutorService(
     runner,
     git,
     workspace,
-    handlers: createStepHandlers(workspace, runner, git, codingEngine),
+    handlers: createStepHandlers(workspace, runner, git, buildCodingEngine),
     verificationTargets,
   });
 
@@ -263,7 +272,7 @@ export async function createExecutorService(
 
   return {
     executor,
-    codingEngine,
+    codingEngine: buildCodingEngine(),
     workspace,
     runner,
     git,
@@ -272,7 +281,7 @@ export async function createExecutorService(
     executePlan,
     async fix(goal: string, context?: readonly string[]) {
       logger.debug('Running fix via coding engine', { goal: goal.slice(0, 100) });
-      return codingEngine.run({ goal, context: context ?? [] });
+      return buildCodingEngine().run({ goal, context: context ?? [] });
     },
   };
 }

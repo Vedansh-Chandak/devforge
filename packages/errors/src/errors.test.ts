@@ -132,6 +132,23 @@ describe("message redaction", () => {
     expect(redacted).toContain("[REDACTED]");
   });
 
+  it("redacts every supported vendor key shape", () => {
+    const message = [
+      "sk-ant-api03-abcdef123456789012345678901234567890",
+      "sk-000000000000000000000000000000000000000",
+      "AIzaSyD1234567890abcdefghijklmnopqrstuvwxyz123456789",
+      "gsk_AbCdEfGh12345678",
+      "xai-abcdef1234567890abcdef",
+    ].join(" ");
+    const redacted = redactSecretText(message);
+    expect(redacted).not.toContain("sk-ant-api03");
+    expect(redacted).not.toContain("sk-000000000000");
+    expect(redacted).not.toContain("AIzaSyD");
+    expect(redacted).not.toContain("gsk_");
+    expect(redacted).not.toContain("xai-");
+    expect(redacted.match(/\[REDACTED\]/g)).not.toBeNull();
+  });
+
   it("redacts environment interpolation", () => {
     const redacted = redactSecretText("token=${OPENAI_API_KEY} via process.env.OPENAI_API_KEY");
     expect(redacted).not.toContain("OPENAI_API_KEY");

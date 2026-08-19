@@ -13,7 +13,7 @@ import { formatError, CliError } from '../errors.js';
 import { redactSecrets } from '@devforge/config';
 
 /** Command handler signature. */
-export type CommandHandler = (ctx: CommandSessionContext, ...args: string[]) => Promise<unknown>;
+export type CommandHandler = (ctx: CommandSessionContext, ...args: Array<string | boolean>) => Promise<unknown>;
 
 /** Build the commander program with all commands registered. */
 export function createProgram(
@@ -118,13 +118,15 @@ export function createProgram(
       await runAction(cmd, async (ctx) => callHandler(handlers, 'status', ctx));
     });
 
-  // doctor
+  // doctor [--models]
   program
     .command('doctor')
     .description('Run health checks: workspace, provider, git, node, pnpm, configuration')
+    .option('--models', 'Opt-in: smoke-test every configured model route with a live call')
     .action(async (...args) => {
       const cmd = args[args.length - 1];
-      await runAction(cmd, async (ctx) => callHandler(handlers, 'doctor', ctx));
+      const models = Boolean(cmd.opts().models);
+      await runAction(cmd, async (ctx) => callHandler(handlers, 'doctor', ctx, models));
     });
 
   // config
@@ -150,11 +152,11 @@ export async function run(argv: readonly string[] = process.argv): Promise<numbe
   const program = createProgram({
     ask: async (ctx, question) => {
       const { handleAsk } = await import('../commands/ask.js');
-      return handleAsk(ctx as ExecutionContext, question);
+      return handleAsk(ctx as ExecutionContext, String(question));
     },
     explain: async (ctx, topic) => {
       const { handleExplain } = await import('../commands/explain.js');
-      return handleExplain(ctx as ExecutionContext, topic);
+      return handleExplain(ctx as ExecutionContext, String(topic));
     },
     review: async (ctx) => {
       const { handleReview } = await import('../commands/review.js');
@@ -162,23 +164,23 @@ export async function run(argv: readonly string[] = process.argv): Promise<numbe
     },
     fix: async (ctx, goal) => {
       const { handleFix } = await import('../commands/fix.js');
-      return handleFix(ctx as ExecutionContext, goal);
+      return handleFix(ctx as ExecutionContext, String(goal));
     },
     plan: async (ctx, goal) => {
       const { handlePlan } = await import('../commands/plan.js');
-      return handlePlan(ctx as ExecutionContext, goal);
+      return handlePlan(ctx as ExecutionContext, String(goal));
     },
     run: async (ctx, goal) => {
       const { handleRun } = await import('../commands/run.js');
-      return handleRun(ctx as ExecutionContext, goal);
+      return handleRun(ctx as ExecutionContext, String(goal));
     },
     status: async (ctx) => {
       const { handleStatus } = await import('../commands/status.js');
       return handleStatus(ctx as LightCliContext);
     },
-    doctor: async (ctx) => {
+    doctor: async (ctx, models = false) => {
       const { handleDoctor } = await import('../commands/doctor.js');
-      return handleDoctor(ctx as LightCliContext);
+      return handleDoctor(ctx as LightCliContext, Boolean(models));
     },
     config: async (ctx) => {
       const { handleConfig } = await import('../commands/config.js');
@@ -246,7 +248,7 @@ async function callHandler(
   handlers: Record<string, CommandHandler>,
   key: string,
   ctx: CommandSessionContext,
-  ...args: string[]
+  ...args: Array<string | boolean>
 ): Promise<unknown> {
   const handler = handlers[key];
   if (!handler) throw new Error(`No handler registered for command '${key}'`);

@@ -9,6 +9,7 @@
 
 import { execSync } from 'node:child_process';
 import { validateModelConfig } from '@devforge/config';
+import { createRouterFromConfig } from './brain.js';
 import type { DevForgeConfig } from '../types.js';
 import type { RepositoryContext } from './workspace.js';
 
@@ -142,6 +143,25 @@ export function runEnvironmentChecks(
       ? `role models configured: ${configuredRoles.join(', ') || 'none'}`
       : roleIssues.join('; '),
     fix: roleModelsOk ? undefined : 'Set DEVFORGE_REASONING_MODEL / DEVFORGE_CODING_MODEL / DEVFORGE_FAST_MODEL to non-empty values',
+  });
+
+  // Model-routes: every role must resolve to a provider (DF-027). Building the
+  // router is deterministic and makes no network calls; a real provider config
+  // surfaces routing errors instead of silently degrading to the fake fallback.
+  const router = createRouterFromConfig(config);
+  const routesOk = router.list().length > 0;
+  checks.push({
+    name: 'model-routes',
+    ok: routesOk,
+    detail: routesOk
+      ? `roles → providers: ${router
+          .list()
+          .map((role) => `${role} → ${router.redactedConfigFor(role)?.provider ?? 'unknown'}`)
+          .join(', ')}`
+      : 'no model role can be resolved',
+    fix: routesOk
+      ? undefined
+      : 'Set DEVFORGE_MODEL_* environment variables, create a .devforge.json, or use provider: fake',
   });
 
   return checks;

@@ -63,13 +63,28 @@ Output format (JSON inside <DEVFORGE_REASONING> tags):
 }
 </DEVFORGE_REASONING>`;
 
+  // Use the reasoning model (read-only) to analyze the diff — never the
+  // mutating coding engine. The reasoning provider is role-routed and performs
+  // no workspace writes (DF-028).
   const reasoningModel = executor.reasoningModel;
 
-  // Use the reasoning model to analyze the diff
-  const diag = await executor.codingEngine.run({
-    goal: prompt,
-    context: [diff.text.slice(0, 5000)],
-  });
+  let modelReview: ReviewReport | null = null;
+  try {
+    const modelSettings = {
+      temperature: 0.2,
+      maxTokens: 8192,
+    };
+    const response = await reasoningModel.provider.generate({
+      messages: [{ role: 'user', content: prompt }],
+      temperature: modelSettings.temperature,
+      maxTokens: modelSettings.maxTokens,
+      signal: ctx.signal,
+    });
+    modelReview = parseGen(response.content);
+  } catch {
+    // Provider unavailable or output not parseable — fall back to the
+    // deterministic structured review below.
+  }
 
   let output = `🔍 Code Review (${changedFiles.length} files)\n\n`;
   output += `Repository: ${repository.root}\n`;
@@ -77,11 +92,11 @@ Output format (JSON inside <DEVFORGE_REASONING> tags):
 
   // Try to parse structured findings from the reasoning model output
   let reviewReport: ReviewReport | null = null;
-  
-  if (diag.outcome === 'SUCCESS' && diag.transactions.length > 0) {
-    // Parse the last transaction's patches for review output
-    // The reasoning model output would be in the model's response
-    // For now, generate a structured review from the diff analysis
+
+  if (modelReview) {
+    reviewReport = modelReview;
+  } else {
+    // Deterministic diff-based review (fallback when model output isn't parseable)
     reviewReport = generateStructuredReview(diff, changedFiles);
   }
 
@@ -116,10 +131,10 @@ Output format (JSON inside <DEVFORGE_REASONING> tags):
     output += `## Diff Analysis\n\n`;
     output += `Changed files:\n${diffSummary}\n\n`;
     
-    if (diag.outcome === 'SUCCESS') {
-      output += `✅ Review complete. ${diag.patchesGenerated} suggestion(s) generated.`;
+    if (modelReview) {
+      output += `✅ Review complete. ${modelReview.findings.length} finding(s).`;
     } else {
-      output += `⚠️  Review outcome: ${diag.outcome}`;
+      output += `⚠️  Review outcome: ${!modelReview ? 'model output unavailable' : 'unknown'}`;
     }
   }
 
@@ -128,6 +143,81 @@ Output format (JSON inside <DEVFORGE_REASONING> tags):
   }
 
   return output;
+}
+
+/**
+ * Parse a ReviewReport from model output. Accepts JSON wrapped in
+ * <DEVFORGE_REASONING> tags, a trailing JSON object, or a JSDoc block.
+ * Returns null when no valid report can be extracted.
+ */
+function parseGen(output: string): ReviewReport | null {
+  const tagged = output.match(/<DEVFORGE_REASONING>([\s\S]*?)<\/DEVFORGE_REASONING>/);
+  const candidate = tagged ? tagged[1] : output;
+  if (candidate === undefined) return null;
+  try {
+    const parsed = JSON.parse(candidate);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof parsed.summary === 'string' &&
+      Array.isArray(parsed.findings)
+    ) {
+      const findings: ReviewFinding[] = [];
+      for (const f of parsed.findings) {
+        if (!f || typeof f !== 'object') continue;
+        const finding: ReviewFinding = {
+          category: toCategory(f.category),
+          file: typeof f.file === 'string' ? f.file : 'general',
+          message: typeof f.message === 'string' ? f.message : 'No message',
+          severity: toSeverity(f.severity),
+        };
+        if (typeof f.line === 'number') finding.line = f.line;
+        if (typeof f.suggestion === 'string') finding.suggestion = f.suggestion;
+        findings.push(finding);
+      }
+      const stats: Record<ReviewCategory, number> = {
+        bugs: 0,
+        style: 0,
+        security: 0,
+        performance: 0,
+        'missing-tests': 0,
+      };
+      for (const f of findings) stats[f.category] += 1;
+      return {
+        summary: String(parsed.summary),
+        findings,
+        stats,
+        changedFiles: [],
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function toCategory(value: unknown): ReviewCategory {
+  switch (String(value)) {
+    case 'bugs':
+    case 'style':
+    case 'security':
+    case 'performance':
+    case 'missing-tests':
+      return value as ReviewCategory;
+    default:
+      return 'style';
+  }
+}
+
+function toSeverity(value: unknown): ReviewFinding['severity'] {
+  switch (String(value)) {
+    case 'error':
+      return 'error';
+    case 'warning':
+      return 'warning';
+    default:
+      return 'info';
+  }
 }
 
 /** Generate a structured review from git diff (fallback when model output isn't parseable). */

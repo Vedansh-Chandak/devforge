@@ -368,6 +368,7 @@ export class AutonomousCodingEngine {
         goal,
         diagnostics: lastDiagnostics,
         attempt,
+        signal: this.signal,
       };
       this.counters.modelCalls += 1;
       let analysis;
@@ -387,6 +388,7 @@ export class AutonomousCodingEngine {
         diagnostics: lastDiagnostics,
         analysis,
         attempt,
+        signal: this.signal,
       };
       this.counters.modelCalls += 1;
       let decision;

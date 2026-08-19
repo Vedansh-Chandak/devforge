@@ -1,14 +1,18 @@
 import { BaseModelProvider } from './provider.js';
 import type { ModelRequest, ModelResponse, FinishReason, ModelUsage } from './types.js';
-import { ModelProviderError } from './errors.js';
+import { ModelProviderError, isModelProviderError } from './errors.js';
 import { retry } from './retry.js';
 import type { RetryOptions, RetryPolicy } from './retry.js';
-import { withTimeout } from './timeout.js';
+import { withTimeout, withStreamTimeout } from './timeout.js';
 import { assertValidProviderConfig } from './validate.js';
 import { assertStructuredOutput, parseJsonContent } from './structured.js';
 import { HttpTransport } from './transport.js';
 import type { FetchFn } from './transport.js';
-import { isRecord } from './transport.js';
+import { isRecord, readStreamBody } from './transport.js';
+import { parseSse } from './sse.js';
+import type { SseRecord } from './sse.js';
+import type { ModelStream, ModelStreamEvent, StreamingModelProvider } from './streaming.js';
+import { withStreamingRetry } from './retry.js';
 
 export type { FetchFn } from './transport.js';
 
@@ -69,6 +73,8 @@ export interface OpenAICompatibleProviderConfig {
 
 const PROVIDER_ID = 'openai-compatible';
 const ENDPOINT = '/chat/completions';
+/** Sentinel SSE payload marking the end of an OpenAI-compatible stream. */
+const STREAM_DONE = '[DONE]';
 
 /**
  * Maps OpenAI finish_reason strings to DevForge FinishReason types.
@@ -100,6 +106,48 @@ function extractUsage(raw: unknown): ModelUsage | undefined {
 }
 
 /**
+ * Accumulated tool-call fragment for a single `delta.tool_calls[index]`.
+ * OpenAI streams these across chunks (id/name in the first delta, arguments
+ * appended incrementally); this adapter reassembles them and emits a single
+ * normalized `tool_call` event once the stream ends.
+ */
+interface ToolCallAccumulator {
+  id?: string;
+  name?: string;
+  arguments: string;
+}
+
+function accumulateToolCall(
+  state: Map<number, ToolCallAccumulator>,
+  raw: unknown,
+): void {
+  if (!isRecord(raw)) return;
+  const index =
+    typeof raw.index === 'number' ? raw.index : nextToolCallIndex(state);
+  const current = state.get(index) ?? { arguments: '' };
+  if (typeof raw.id === 'string' && current.id === undefined) {
+    current.id = raw.id;
+  }
+  if (isRecord(raw.function)) {
+    if (typeof raw.function.name === 'string' && current.name === undefined) {
+      current.name = raw.function.name;
+    }
+    if (typeof raw.function.arguments === 'string') {
+      current.arguments = current.arguments + raw.function.arguments;
+    }
+  }
+  state.set(index, current);
+}
+
+function nextToolCallIndex(state: Map<number, ToolCallAccumulator>): number {
+  let max = -1;
+  for (const key of state.keys()) {
+    if (key > max) max = key;
+  }
+  return max + 1;
+}
+
+/**
  * Provider for OpenAI-compatible chat-completion endpoints.
  *
  * Rewired in DF-026B onto the shared DF-026A primitives: request validation,
@@ -117,7 +165,7 @@ function extractUsage(raw: unknown): ModelUsage | undefined {
  * });
  * ```
  */
-export class OpenAICompatibleProvider extends BaseModelProvider {
+export class OpenAICompatibleProvider extends BaseModelProvider implements StreamingModelProvider {
   readonly id = PROVIDER_ID;
 
   private readonly transport: HttpTransport;
@@ -205,6 +253,229 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     const response = this.parseResponse(json);
     this.validateStructuredResponse(request, response.content);
     return response;
+  }
+
+  /** {@inheritDoc StreamingModelProvider.stream} */
+  stream(request: ModelRequest): ModelStream {
+    this.validateRequest(request);
+
+    const policy: RetryPolicy = {
+      maxRetries: this.retryPolicy?.maxRetries ?? 2,
+      ...this.retryPolicy,
+      ...(request.maxRetries !== undefined ? { maxRetries: request.maxRetries } : {}),
+    };
+
+    return withStreamingRetry(
+      (attempt) =>
+        withStreamTimeout(
+          (signal) => this.executeStream(request, signal),
+          {
+            timeoutMs: request.timeoutMs ?? this.timeoutMs,
+            signal: request.signal,
+            operation: 'stream',
+            provider: this.id,
+          },
+        ),
+      {
+        operation: 'stream',
+        provider: this.id,
+        policy,
+        signal: request.signal,
+        onRetry: this.onRetry,
+      },
+    );
+  }
+
+  /**
+   * Stream one attempt of a chat-completions HTTP/SSE response, yielding
+   * normalized events. Tool-call fragments are reassembled per index and
+   * flushed (as complete `tool_call` events) after the stream terminates;
+   * text deltas are always forwarded incrementally — never buffered until the
+   * response ends. Structured-output requests re-use the DF-026A validator on
+   * the accumulated text before the `completed` event is allowed.
+   */
+  private async *executeStream(
+    request: ModelRequest,
+    signal: AbortSignal,
+  ): AsyncGenerator<ModelStreamEvent> {
+    const response = await this.transport.postStream({
+      path: ENDPOINT,
+      body: this.buildStreamRequestBody(request),
+      signal,
+    });
+    if (!response.body) {
+      throw this.providerStreamError('Provider returned no stream body');
+    }
+
+    const toolCalls = new Map<number, ToolCallAccumulator>();
+    let finishReason: FinishReason | undefined;
+    let responseId: string | undefined;
+    let model: string | undefined;
+    let usageEmitted = false;
+    let finished = false;
+    let sawDone = false;
+    let textBuffer = '';
+
+    try {
+      for await (const record of parseSse(readStreamBody(response.body, signal))) {
+        const chunk = this.parseChunk(record);
+        if (chunk === undefined) continue;
+
+        if (typeof chunk.id === 'string' && responseId === undefined) {
+          responseId = chunk.id;
+        }
+        if (typeof chunk.model === 'string' && model === undefined) {
+          model = chunk.model;
+        }
+        if (chunk.usageEvents !== undefined && !usageEmitted) {
+          usageEmitted = true;
+          for (const usage of chunk.usageEvents) {
+            yield { type: 'usage', ...usage, provider: this.id };
+          }
+        }
+        if (chunk.text.length > 0) {
+          textBuffer += chunk.text;
+          yield { type: 'text_delta', text: chunk.text };
+        }
+        if (chunk.toolCalls.length > 0) {
+          for (const toolCall of chunk.toolCalls) {
+            accumulateToolCall(toolCalls, toolCall);
+          }
+        }
+        if (chunk.finishReason !== undefined && !finished) {
+          finishReason = chunk.finishReason;
+          finished = true;
+        }
+        if (chunk.doneMark) {
+          sawDone = true;
+          break;
+        }
+      }
+    } catch (error) {
+      if (isModelProviderError(error)) throw error;
+      const message =
+        error instanceof Error ? error.message : String(error);
+      throw this.providerStreamError(
+        `Failed reading provider stream: ${this.transport.sanitize(message)}`,
+      );
+    }
+
+    if (!sawDone && !finished) {
+      throw new ModelProviderError(
+        'Provider stream ended before completion was detected',
+        { provider: this.id, code: 'PROVIDER_ERROR', retryable: false },
+      );
+    }
+
+    let index = 0;
+    for (const tool of toolCalls.values()) {
+      if (tool.id !== undefined || tool.name !== undefined) {
+        yield {
+          type: 'tool_call',
+          id: tool.id ?? `tool_${index}`,
+          name: tool.name ?? 'unknown',
+          arguments: tool.arguments,
+        };
+      }
+      index += 1;
+    }
+
+    if (request.responseFormat) {
+      this.validateStructuredResponse(request, textBuffer);
+    }
+
+    yield {
+      type: 'completed',
+      finishReason,
+      id: responseId,
+      model,
+      provider: this.id,
+    };
+  }
+
+  /** Translate the normalized request into a streaming request body. */
+  private buildStreamRequestBody(request: ModelRequest): Record<string, unknown> {
+    const body = this.buildRequestBody(request);
+    body.stream = true;
+    return body;
+  }
+
+  /**
+   * Vendor-local parsing of a single SSE record into the pieces an
+   * OpenAI-compatible chunk can contribute. Returns `undefined` for empty /
+   * ignorable frames (e.g. keep-alives).
+   */
+  private parseChunk(record: SseRecord):
+    | {
+        text: string;
+        id?: string;
+        model?: string;
+        usageEvents?: ModelUsage[];
+        toolCalls: unknown[];
+        finishReason?: FinishReason;
+        doneMark: boolean;
+      }
+    | undefined {
+    const data = record.data.trim();
+    if (data.length === 0) return undefined;
+    if (data === STREAM_DONE) {
+      return { text: '', toolCalls: [], doneMark: true };
+    }
+
+    let json: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(data);
+      if (!isRecord(parsed)) {
+        throw new Error('chunk is not a JSON object');
+      }
+      json = parsed;
+    } catch {
+      const snippet = this.transport.sanitize(data.slice(0, 300));
+      throw this.providerStreamError(`Malformed SSE chunk: ${snippet}`);
+    }
+
+    const chunk: {
+      text: string;
+      id?: string;
+      model?: string;
+      usageEvents?: ModelUsage[];
+      toolCalls: unknown[];
+      finishReason?: FinishReason;
+      doneMark: boolean;
+    } = { text: '', toolCalls: [], doneMark: false };
+
+    if (typeof json.id === 'string') chunk.id = json.id;
+    if (typeof json.model === 'string') chunk.model = json.model;
+    const usage = extractUsage(json.usage);
+    if (usage !== undefined) chunk.usageEvents = [usage];
+
+    const choices = Array.isArray(json.choices) ? json.choices : [];
+    for (const rawChoice of choices) {
+      if (!isRecord(rawChoice)) continue;
+      const delta = rawChoice.delta;
+      if (isRecord(delta)) {
+        if (typeof delta.content === 'string' && delta.content.length > 0) {
+          chunk.text += delta.content;
+        }
+        if (Array.isArray(delta.tool_calls)) {
+          for (const toolCall of delta.tool_calls) {
+            chunk.toolCalls.push(toolCall);
+          }
+        }
+      }
+      if (typeof rawChoice.finish_reason === 'string') {
+        chunk.finishReason = mapFinishReason(rawChoice.finish_reason);
+      }
+    }
+    return chunk;
+  }
+
+  private providerStreamError(message: string): ModelProviderError {
+    return new ModelProviderError(message, {
+      provider: this.id,
+      code: 'PROVIDER_ERROR',
+      retryable: false,
+    });
   }
 
   /** Translate the normalized request into the provider-specific body. */

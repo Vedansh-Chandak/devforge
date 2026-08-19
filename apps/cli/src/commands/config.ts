@@ -7,7 +7,19 @@
 
 import type { LightCliContext } from '../services/session.js';
 import { loadConfig, userConfigPath } from '../services/config-loader.js';
+import { createRouterFromConfig } from '../services/brain.js';
 import type { RoleModelsConfig } from '../types.js';
+import type { ModelSelectionRole } from '@devforge/model-provider';
+
+/** Structured resolved route for one role (apiKey always masked). */
+export interface ResolvedRoutePayload {
+  readonly role: ModelSelectionRole;
+  readonly source: string;
+  readonly provider: string;
+  readonly model?: string;
+  readonly baseUrl?: string;
+  readonly apiKey?: string;
+}
 
 /** Structured config payload for `--json` (apiKey always masked). */
 export interface ConfigPayload {
@@ -19,6 +31,7 @@ export interface ConfigPayload {
   readonly maxRetries?: number;
   readonly temperature: number;
   readonly roleModels?: RoleModelsConfig;
+  readonly routes?: readonly ResolvedRoutePayload[];
   readonly maxRepairAttempts?: number;
   readonly workspace?: string;
   readonly logLevel: string;
@@ -31,6 +44,11 @@ export async function handleConfig(ctx: LightCliContext): Promise<string | Confi
   const { sources } = await loadConfig(ctx.cwd);
   const userPath = userConfigPath();
 
+  // Resolve the effective role→provider mapping (DF-027). Provider adapters
+  // are constructed lazily by resolve(); only normalized (redacted) fields are
+  // surfaced here, so no secret material is rendered.
+  const routes = resolveRoutes(config);
+
   const payload: ConfigPayload = {
     provider: config.provider,
     model: config.model,
@@ -40,6 +58,7 @@ export async function handleConfig(ctx: LightCliContext): Promise<string | Confi
     maxRetries: config.maxRetries,
     temperature: config.temperature ?? 0.2,
     roleModels: config.roleModels,
+    routes,
     maxRepairAttempts: config.maxRepairAttempts,
     workspace: config.workspace,
     logLevel: config.logLevel,
@@ -66,6 +85,9 @@ export async function handleConfig(ctx: LightCliContext): Promise<string | Confi
 
   let output = `⚙️  DevForge Config\n\n${renderKeyValue(lines)}`;
 
+  output += `\n\nResolved model routes:\n`;
+  output += routes.length > 0 ? `${renderKeyValue(routeLines(routes))}` : `  (none)\n`;
+
   output += `\n\nConfig sources:\n`;
   if (sources.length === 0) {
     output += `  (defaults only)\n`;
@@ -79,6 +101,38 @@ export async function handleConfig(ctx: LightCliContext): Promise<string | Confi
   output += `Project config path: ${ctx.cwd}/.devforge.json\n`;
 
   return output;
+}
+
+/** Build the effective role→provider mapping, redacted for display (DF-027). */
+function resolveRoutes(config: LightCliContext['config']): readonly ResolvedRoutePayload[] {
+  try {
+    const router = createRouterFromConfig(config as never);
+    const roles = router.list();
+    return roles.map((role) => {
+      const resolved = router.resolve(role);
+      const redacted = router.redactedConfigFor(role);
+      return {
+        role,
+        source: resolved.source,
+        provider: redacted?.provider ?? 'unknown',
+        model: redacted?.model,
+        baseUrl: redacted?.baseUrl,
+        apiKey: redacted?.apiKey,
+      };
+    });
+  } catch {
+    // Routing is best-effort here: config display must never crash on a
+    // malformed model configuration.
+    return [];
+  }
+}
+
+/** Human rows for the resolved model routes (DF-027). */
+function routeLines(routes: readonly ResolvedRoutePayload[]): readonly (readonly [string, string])[] {
+  return routes.map((route) => {
+    const target = route.model ? `${route.provider} / ${route.model}` : route.provider;
+    return [`Route · ${route.role}`, `${target}  (${route.source})`];
+  });
 }
 
 /** Human rows for the role-specific models (DF-026C). */
@@ -97,6 +151,7 @@ function roleModelLines(
 
 /** Render key/value pairs, aligned on the key column. */
 function renderKeyValue(pairs: readonly (readonly [string, string])[]): string {
+  if (pairs.length === 0) return '';
   const width = Math.max(...pairs.map(([k]) => k.length), 0);
   return pairs.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`).join('\n');
 }

@@ -1,6 +1,21 @@
 import { BaseModelProvider } from '../provider.js';
 import type { ModelRequest, ModelResponse } from '../types.js';
 import { ModelProviderError } from '../errors.js';
+import type { ModelErrorCode } from '../errors.js';
+import type { ModelStream, ModelStreamEvent } from '../streaming.js';
+
+export interface FakeProviderStreamConfig {
+  /** Scripted events emitted in order. No network is ever involved. */
+  readonly events?: readonly ModelStreamEvent[];
+  /** Simulated in-stream failure thrown after the configured delay. */
+  readonly error?: {
+    readonly message: string;
+    readonly code: ModelErrorCode;
+    readonly retryable?: boolean;
+  };
+  /** Delay (ms) between scripted events after the initial one. Default 0. */
+  readonly delay?: number;
+}
 
 export interface FakeProviderConfig {
   response?: ModelResponse;
@@ -10,6 +25,8 @@ export interface FakeProviderConfig {
     retryable?: boolean;
   };
   delay?: number;
+  /** Deterministic streaming configuration (DF-026D). */
+  stream?: FakeProviderStreamConfig;
 }
 
 export class FakeModelProvider extends BaseModelProvider {
@@ -185,5 +202,83 @@ export class FakeModelProvider extends BaseModelProvider {
 
   clearHistory(): void {
     this.requestHistory = [];
+  }
+
+  /**
+   * Deterministic streaming support (DF-026D). Emits the scripted events from
+   * `config.stream.events` (or a canonical text → usage → completed sequence
+   * when no script is supplied), optionally applies failure simulation, and
+   * honours `request.signal` cancellation at every step. No network.
+   */
+  async *stream(request: ModelRequest): ModelStream {
+    this.validateRequest(request);
+    this.requestHistory.push(request);
+
+    const streamConfig = this.config.stream;
+    const delay = streamConfig?.delay ?? this.config.delay ?? 0;
+
+    if (request.signal?.aborted) {
+      throw this.cancelled();
+    }
+
+    if (streamConfig?.error) {
+      await this.waitFor(delay, request.signal);
+      if (request.signal?.aborted) throw this.cancelled();
+      throw new ModelProviderError(streamConfig.error.message, {
+        provider: this.id,
+        code: streamConfig.error.code,
+        retryable: streamConfig.error.retryable,
+      });
+    }
+
+    const script = streamConfig?.events ?? this.defaultStreamEvents();
+    let index = 0;
+    for (const event of script) {
+      if (index > 0) {
+        await this.waitFor(delay, request.signal);
+      }
+      if (request.signal?.aborted) throw this.cancelled();
+      yield event;
+      index += 1;
+    }
+  }
+
+  private defaultStreamEvents(): readonly ModelStreamEvent[] {
+    const response = this.config.response ?? {
+      content: 'Fake response',
+      model: 'fake-model',
+      finishReason: 'stop',
+      usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+    };
+    const events: ModelStreamEvent[] = [];
+    if (response.content.length > 0) {
+      events.push({ type: 'text_delta', text: response.content });
+    }
+    if (response.usage) {
+      events.push({ type: 'usage', ...response.usage, provider: this.id });
+    }
+    events.push({ type: 'completed', provider: this.id });
+    return events;
+  }
+
+  private waitFor(ms: number, signal?: AbortSignal): Promise<void> {
+    if (ms <= 0) return Promise.resolve();
+    if (signal?.aborted) return Promise.reject(this.cancelled());
+    return new Promise<void>((resolve, reject) => {
+      const onAbort = (): void => {
+        clearTimeout(timer);
+        reject(this.cancelled());
+      };
+      const timer = setTimeout(resolve, ms);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
+  private cancelled(): ModelProviderError {
+    return new ModelProviderError('Model request cancelled', {
+      provider: this.id,
+      code: 'CANCELLED',
+      retryable: false,
+    });
   }
 }

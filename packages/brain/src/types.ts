@@ -67,9 +67,17 @@ export interface BrainConfig {
   /**
    * Role-based model router (DF-026C). Mutually exclusive with `provider`:
    * when both are given, construction throws. When only the router is given,
-   * the generation provider is resolved via `select('reasoning')`.
+   * the generation provider is resolved via `select(role)`.
    */
   router?: ModelRouterInterface;
+  /**
+   * Model role that powers the brain (DF-027). Default: `'reasoning'`.
+   * A brain configured for lightweight operations may request `'fast'`.
+   * When the requested role is not configured but `'fast'` is and the
+   * requested role was `'reasoning'`, the fast role is used as the model
+   * selection fallback (role routing, never provider failover).
+   */
+  role?: ModelSelectionRole;
   /** Max characters for the combined user message content (default: 100000) */
   maxContextChars?: number;
   /** Tool execution configuration. Disabled by default. */
