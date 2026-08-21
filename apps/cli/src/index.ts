@@ -16,7 +16,15 @@ export { DEFAULT_CONFIG, DEFAULT_TEMPERATURE, DEFAULT_MAX_TOKENS } from './types
 
 // Config loader
 export { validateConfig, loadConfig, loadFromEnv, loadJsonFile, userConfigPath, isProviderKind } from './services/config-loader.js';
-export type { ConfigValidationResult } from './services/config-loader.js';
+export type { ConfigValidationResult, CredentialSource } from './services/config-loader.js';
+
+// Model route resolution (DF-029B)
+export {
+  resolveModelRoutes,
+  summarizeRoleRoutes,
+  hasExplicitModelConfig,
+} from './services/model-routes.js';
+export type { ResolvedRoutePayload, RoleRouteStatus } from './services/model-routes.js';
 
 // Services
 export {
@@ -49,6 +57,9 @@ export {
   handleConfig,
   runHealthChecks,
 } from './commands/index.js';
+export type { HealthCheck } from './commands/index.js';
+export type { ModelConfigurationSummary } from './commands/doctor.js';
+export type { ConfigPayload } from './commands/config.js';
 
 // Errors
 export { CliError, ConfigError, formatError } from './errors.js';

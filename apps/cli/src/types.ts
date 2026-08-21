@@ -49,6 +49,13 @@ export interface RawDevForgeConfig {
   readonly model?: string;
   readonly baseUrl?: string;
   readonly apiKey?: string;
+  /**
+   * Credential reference (DF-029B): name of an environment variable holding
+   * the API key (e.g. "OPENROUTER_API_KEY"). Only the NAME may appear in
+   * config files — never the secret itself. Resolved at load time; an
+   * explicit `apiKey` takes precedence when both are present.
+   */
+  readonly apiKeyEnv?: string;
   readonly timeoutMs?: number;
   readonly maxRetries?: number;
   readonly temperature?: number;

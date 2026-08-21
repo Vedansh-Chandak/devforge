@@ -1,43 +1,76 @@
 {
   "name": "@devforge/cli",
   "version": "0.1.0",
-  "private": true,
+  "description": "DevForge — autonomous coding agent CLI. Ask, plan, review, fix, explain, and run DevForge from your terminal.",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vedansh-Chandak/devforge.git"
+  },
+  "homepage": "https://github.com/Vedansh-Chandak/devforge#readme",
+  "bugs": {
+    "url": "https://github.com/Vedansh-Chandak/devforge/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "devforge": "./dist/main.js"
   },
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.cjs"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs",
     "dev": "tsx src/main.ts",
     "start": "node dist/main.js",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "commander": "^12.1.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "typescript": "5.9.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
     "@devforge/brain": "workspace:*",
     "@devforge/config": "workspace:*",
+    "@devforge/errors": "workspace:*",
     "@devforge/execution": "workspace:*",
     "@devforge/knowledge-graph": "workspace:*",
+    "@devforge/logger": "workspace:*",
     "@devforge/model-provider": "workspace:*",
     "@devforge/parser-typescript": "workspace:*",
     "@devforge/planner": "workspace:*",
+    "@devforge/prompt-composer": "workspace:*",
     "@devforge/repository-indexer": "workspace:*",
     "@devforge/runtime": "workspace:*",
     "@devforge/symbol-graph": "workspace:*",
-    "commander": "^12.1.0"
-  },
-  "devDependencies": {
+    "@devforge/tools": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^22.15.3",
+    "dts-bundle-generator": "^9.5.1",
+    "esbuild": "^0.28.1",
     "typescript": "5.9.2",
     "vitest": "^2.0.0"
   }
