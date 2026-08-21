@@ -1,13 +1,23 @@
 /**
- * @devforge/cli — Config loader service (M1).
+ * @devforge/cli — Config loader service (M1, DF-029B).
  *
- * Loads configuration from, in order of precedence:
+ * Loads configuration from, in order of precedence (highest wins):
+ *
+ *   0. CLI flags (e.g. --model; applied by the session service post-load)
  *   1. environment variables (DEVFORGE_*)
  *   2. ./.devforge.json (project-local)
  *   3. ~/.devforge/config.json (user-global)
  *   4. defaults
  *
- * Returns a fully validated DevForgeConfig.
+ * Credential handling: the API key may come from DEVFORGE_MODEL_API_KEY /
+ * DEVFORGE_API_KEY directly, or indirectly via `apiKeyEnv` in a config file,
+ * which names an environment variable holding the secret (the secret itself
+ * never appears on disk). An explicit `apiKey` beats `apiKeyEnv`. Secrets are
+ * never logged, never included in validation errors, and always masked by
+ * display commands.
+ *
+ * Returns a fully validated DevForgeConfig plus the list of sources that
+ * contributed and where the credential came from.
  */
 
 import { homedir } from 'node:os';
@@ -93,6 +103,16 @@ export function validateConfig(raw: RawDevForgeConfig | undefined): ConfigValida
   if (provider === 'gemini' || provider === 'anthropic') {
     if (!input.model || input.model.trim().length === 0) {
       errors.push(`provider "${provider}" requires a "model"`);
+    }
+  }
+
+  if (input.apiKey !== undefined && typeof input.apiKey !== 'string') {
+    errors.push('apiKey must be a string');
+  }
+
+  if (input.apiKeyEnv !== undefined) {
+    if (typeof input.apiKeyEnv !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(input.apiKeyEnv)) {
+      errors.push('apiKeyEnv must be a valid environment variable name');
     }
   }
 
@@ -231,14 +251,18 @@ export function userConfigPath(): string | null {
   return path.join(home, '.devforge', 'config.json');
 }
 
+/** Where the resolved API key credential came from (never the value). */
+export type CredentialSource = 'environment' | 'project' | 'user' | 'none';
+
 /**
  * Load and validate configuration for a given project directory.
- * Precedence: env > ./.devforge.json > ~/.devforge/config.json > defaults.
+ * Precedence: env > ./.devforge.json > ~/.devforge/config.json > defaults
+ * (CLI flags such as --model are applied on top by the session service).
  */
 export async function loadConfig(
   workspaceSource: string,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ config: DevForgeConfig; sources: string[] }> {
+): Promise<{ config: DevForgeConfig; sources: string[]; credentialSource: CredentialSource }> {
   const sources: string[] = [];
 
   const envRaw = loadFromEnv(env);
@@ -261,17 +285,41 @@ export async function loadConfig(
     }
   }
 
-  // Merge: user is base, project overrides, env overrides.
-  const merged: RawDevForgeConfig = {
+  // Merge: user is base, project overrides, env overrides (mutable so the
+  // apiKeyEnv credential reference can be resolved below).
+  const merged: { -readonly [K in keyof RawDevForgeConfig]: RawDevForgeConfig[K] } = {
     ...userRaw,
     ...projectRaw,
     ...envRaw,
   };
+
+  // Credential reference resolution (DF-029B): `apiKeyEnv` names an env var
+  // holding the secret. An explicit `apiKey` always wins. The referenced
+  // variable's VALUE is only read into the in-memory config — it is never
+  // logged, never echoed in errors, and masked by every display command.
+  if (!merged.apiKey && merged.apiKeyEnv) {
+    const referenced = env[merged.apiKeyEnv];
+    if (referenced !== undefined && referenced.trim().length > 0) {
+      merged.apiKey = referenced;
+    }
+  }
+
+  // Determine where the credential came from (for display only).
+  let credentialSource: CredentialSource = 'none';
+  if (merged.apiKey !== undefined) {
+    if (envRaw.apiKey !== undefined) {
+      credentialSource = 'environment';
+    } else if (projectRaw?.apiKey !== undefined || projectRaw?.apiKeyEnv !== undefined) {
+      credentialSource = 'project';
+    } else {
+      credentialSource = 'user';
+    }
+  }
 
   const result = validateConfig(merged);
   if (!result.ok || !result.config) {
     throw new Error(`Invalid configuration: ${result.errors.join('; ')}`);
   }
 
-  return { config: result.config, sources };
+  return { config: result.config, sources, credentialSource };
 }

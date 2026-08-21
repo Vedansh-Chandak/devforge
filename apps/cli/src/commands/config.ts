@@ -1,25 +1,23 @@
 /**
- * @devforge/cli — config command (M1, DF-026C).
+ * @devforge/cli — config command (M1, DF-026C, DF-029B).
  *
  * Show the resolved configuration and which sources it came from. Secret
  * values (apiKey) are always masked. `--json` emits a structured object.
+ * Inspection only — this command never mutates configuration files.
  */
 
 import type { LightCliContext } from '../services/session.js';
 import { loadConfig, userConfigPath } from '../services/config-loader.js';
-import { createRouterFromConfig } from '../services/brain.js';
+import type { CredentialSource } from '../services/config-loader.js';
+import {
+  resolveModelRoutes,
+  type ResolvedRoutePayload,
+} from '../services/model-routes.js';
 import type { RoleModelsConfig } from '../types.js';
 import type { ModelSelectionRole } from '@devforge/model-provider';
 
-/** Structured resolved route for one role (apiKey always masked). */
-export interface ResolvedRoutePayload {
-  readonly role: ModelSelectionRole;
-  readonly source: string;
-  readonly provider: string;
-  readonly model?: string;
-  readonly baseUrl?: string;
-  readonly apiKey?: string;
-}
+/** Re-exported for backward compatibility (DF-027 consumers). */
+export type { ResolvedRoutePayload };
 
 /** Structured config payload for `--json` (apiKey always masked). */
 export interface ConfigPayload {
@@ -27,6 +25,8 @@ export interface ConfigPayload {
   readonly model?: string;
   readonly baseUrl?: string;
   readonly apiKey?: string;
+  /** Where the credential came from — never the value itself (DF-029B). */
+  readonly credentialSource: CredentialSource;
   readonly timeoutMs?: number;
   readonly maxRetries?: number;
   readonly temperature: number;
@@ -41,19 +41,20 @@ export interface ConfigPayload {
 /** Handler for `devforge config`. */
 export async function handleConfig(ctx: LightCliContext): Promise<string | ConfigPayload> {
   const { config, options } = ctx;
-  const { sources } = await loadConfig(ctx.cwd);
+  const { sources, credentialSource } = await loadConfig(ctx.cwd);
   const userPath = userConfigPath();
 
   // Resolve the effective role→provider mapping (DF-027). Provider adapters
   // are constructed lazily by resolve(); only normalized (redacted) fields are
   // surfaced here, so no secret material is rendered.
-  const routes = resolveRoutes(config);
+  const routes = resolveModelRoutes(config);
 
   const payload: ConfigPayload = {
     provider: config.provider,
     model: config.model,
     baseUrl: config.baseUrl,
     apiKey: config.apiKey ? '***' : undefined,
+    credentialSource,
     timeoutMs: config.timeoutMs,
     maxRetries: config.maxRetries,
     temperature: config.temperature ?? 0.2,
@@ -73,7 +74,7 @@ export async function handleConfig(ctx: LightCliContext): Promise<string | Confi
     ['Provider', config.provider],
     ['Model', config.model ?? '(default)'],
     ['Base URL', config.baseUrl ?? '(default)'],
-    ['API key', config.apiKey ? '***' : '(none)'],
+    ['API key', config.apiKey ? `*** (${credentialLabel(credentialSource)})` : '(none)'],
     ['Timeout (ms)', String(config.timeoutMs ?? 'default')],
     ['Max retries', String(config.maxRetries ?? 'default')],
     ['Temperature', String(config.temperature ?? 0.2)],
@@ -99,31 +100,22 @@ export async function handleConfig(ctx: LightCliContext): Promise<string | Confi
     output += `\nUser config path: ${userPath}\n`;
   }
   output += `Project config path: ${ctx.cwd}/.devforge.json\n`;
+  output += `\nPrecedence: CLI flags > environment > ./.devforge.json > ~/.devforge/config.json > defaults\n`;
 
   return output;
 }
 
-/** Build the effective role→provider mapping, redacted for display (DF-027). */
-function resolveRoutes(config: LightCliContext['config']): readonly ResolvedRoutePayload[] {
-  try {
-    const router = createRouterFromConfig(config as never);
-    const roles = router.list();
-    return roles.map((role) => {
-      const resolved = router.resolve(role);
-      const redacted = router.redactedConfigFor(role);
-      return {
-        role,
-        source: resolved.source,
-        provider: redacted?.provider ?? 'unknown',
-        model: redacted?.model,
-        baseUrl: redacted?.baseUrl,
-        apiKey: redacted?.apiKey,
-      };
-    });
-  } catch {
-    // Routing is best-effort here: config display must never crash on a
-    // malformed model configuration.
-    return [];
+/** Human label for a credential source (never includes the value). */
+function credentialLabel(source: CredentialSource): string {
+  switch (source) {
+    case 'environment':
+      return 'from environment';
+    case 'project':
+      return 'from project config';
+    case 'user':
+      return 'from user config';
+    case 'none':
+      return 'unset';
   }
 }
 

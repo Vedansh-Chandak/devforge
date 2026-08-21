@@ -1,20 +1,47 @@
 /**
- * @devforge/cli — doctor command (M1).
+ * @devforge/cli — doctor command (M1, DF-029B).
  *
  * Run health checks: workspace, provider, git, node, pnpm, configuration,
  * plus tool-specific checks using the shared environment service.
+ *
+ * First-run behavior (DF-029B): on an unconfigured installation `doctor`
+ * clearly explains whether a model provider is configured, which roles are
+ * configured, what is missing, and how to configure it. It never crashes
+ * merely because no model API key is configured.
  */
 
 import { execSync } from 'node:child_process';
 import type { LightCliContext } from '../services/session.js';
 import { color } from '../services/output.js';
 import { runModelSmoke } from '../services/model-smoke.js';
+import {
+  resolveModelRoutes,
+  summarizeRoleRoutes,
+  hasExplicitModelConfig,
+} from '../services/model-routes.js';
+import type { ResolvedRoutePayload, RoleRouteStatus } from '../services/model-routes.js';
 
 export interface HealthCheck {
   readonly name: string;
   readonly ok: boolean;
   readonly detail: string;
   readonly fix?: string;
+}
+
+/** Structured model-configuration summary for `doctor --json` (DF-029B). */
+export interface ModelConfigurationSummary {
+  /** True when any explicit model configuration is present (not pure defaults). */
+  readonly configured: boolean;
+  readonly provider: string;
+  readonly model?: string;
+  /** True when a credential of some kind is present (value never included). */
+  readonly hasCredential: boolean;
+  /** Roles that currently resolve to a route. */
+  readonly configuredRoles: readonly string[];
+  /** Roles with no resolvable route. */
+  readonly missingRoles: readonly string[];
+  /** Redacted role→provider routes. */
+  readonly routes: readonly ResolvedRoutePayload[];
 }
 
 /** Run a shell command and return success + trimmed output (best-effort). */
@@ -105,24 +132,123 @@ export function runHealthChecks(ctx: LightCliContext): {
   };
 }
 
+/** Build the DF-029B model-configuration summary (secrets never included). */
+export function buildModelConfigurationSummary(config: LightCliContext['config']): {
+  summary: ModelConfigurationSummary;
+  roleStatus: readonly RoleRouteStatus[];
+} {
+  const routes = resolveModelRoutes(config);
+  const explicit = hasExplicitModelConfig(config);
+  // A role resolved only via the offline fake fallback (with no explicit config)
+  // is not considered genuinely configured for first-run reporting.
+  const roleStatus = summarizeRoleRoutes(routes).map((r) => ({
+    ...r,
+    configured: r.configured && (r.provider !== 'fake' || explicit),
+  }));
+  const configuredRoles = roleStatus.filter((r) => r.configured).map((r) => r.role);
+  const missingRoles = roleStatus.filter((r) => !r.configured).map((r) => r.role);
+
+  const summary: ModelConfigurationSummary = {
+    configured: explicit,
+    provider: config.provider,
+    model: config.model,
+    hasCredential: config.apiKey !== undefined || config.baseUrl !== undefined,
+    configuredRoles,
+    missingRoles,
+    routes,
+  };
+
+  return { summary, roleStatus };
+}
+
+/**
+ * Human-readable detail for the model-configuration check. Explains whether a
+ * model provider is configured and which roles resolve — without ever
+ * including secret material.
+ */
+function buildModelConfigurationDetail(
+  config: LightCliContext['config'],
+  routes: readonly ResolvedRoutePayload[],
+  roleStatus: readonly RoleRouteStatus[],
+): string {
+  const providerLabel = config.provider === 'fake' && !hasExplicitModelConfig(config)
+    ? 'none (defaults to fake)'
+    : config.provider;
+
+  if (routes.length > 0 && hasExplicitModelConfig(config)) {
+    const routeSummary = roleStatus
+      .map((r) => `${r.role} → ${r.provider}${r.model ? ` / ${r.model}` : ''}`)
+      .join(', ');
+    return `model provider "${providerLabel}" configured; roles: ${routeSummary}`;
+  }
+
+  if (config.provider === 'fake') {
+    return 'no model provider configured (running on the offline fake provider); reasoning/coding/fast fall back to fake';
+  }
+
+  // A real provider is set but no role could be resolved.
+  const missing = roleStatus.filter((r) => !r.configured).map((r) => r.role);
+  const missingPart = missing.length > 0 ? ` unresolved roles: ${missing.join(', ')}` : '';
+  return `model provider "${providerLabel}" is set but no model routes resolve${missingPart}`;
+}
+
+/** Actionable fix text for the model-configuration check (DF-029B). */
+function buildModelConfigurationFix(
+  config: LightCliContext['config'],
+): string | undefined {
+  if (hasExplicitModelConfig(config)) return undefined;
+
+  const steps: string[] = [
+    'Set DEVFORGE_MODEL_PROVIDER (gemini | anthropic | openai-compatible), DEVFORGE_MODEL, and DEVFORGE_MODEL_API_KEY',
+    'or create a .devforge.json with {"provider": "...", "model": "..."}',
+    'or keep the offline fake provider for testing',
+  ];
+  return steps.join('; ');
+}
+
 /**
  * Handler for `devforge doctor`.
  *
- * @param modelsWhen enabling `--models`, performs an opt-in live smoke test of
+ * On an unconfigured installation clearly explains:
+ *   - whether a model provider is configured
+ *   - which roles are configured
+ *   - what is missing
+ *   - how the user can configure it
+ *
+ * It MUST NOT crash merely because no model API key is configured.
+ *
+ * @param models When enabling `--models`, performs an opt-in live smoke test of
  *   every configured model route (never runs by default / in CI / offline).
  */
 export async function handleDoctor(
   ctx: LightCliContext,
   models = false,
-): Promise<string | { checks: readonly HealthCheck[]; allOk: boolean }> {
+): Promise<string | { checks: readonly HealthCheck[]; allOk: boolean; modelConfiguration: ModelConfigurationSummary }> {
   const base = runHealthChecks(ctx);
-  const checks = models
-    ? [...base.checks, ...(await runModelSmoke(ctx.config, { signal: ctx.signal }))]
-    : base.checks;
+  const { summary, roleStatus } = buildModelConfigurationSummary(ctx.config);
+
+  // Dedicated first-run check (DF-029B): explain the model configuration state.
+  // It is informational — `doctor` must never fail merely because no real model
+  // is configured, since the offline `fake` provider is a valid credential-free
+  // operational mode. Genuine misconfiguration (invalid provider/model) is
+  // already rejected at config load time, so by the time `doctor` runs the
+  // config is always structurally valid. Missing *credentials* for a real
+  // provider are surfaced by the separate `provider` check below.
+  const modelConfiguredCheck: HealthCheck = {
+    name: 'model-configuration',
+    ok: true,
+    detail: buildModelConfigurationDetail(ctx.config, summary.routes, roleStatus),
+    fix: buildModelConfigurationFix(ctx.config),
+  };
+
+  const smokeChecks = models
+    ? await runModelSmoke(ctx.config, { signal: ctx.signal })
+    : [];
+  const checks = [...base.checks, ...smokeChecks, modelConfiguredCheck];
   const allOk = checks.every((c) => c.ok);
 
   if (ctx.options.json) {
-    return { checks, allOk };
+    return { checks, allOk, modelConfiguration: summary };
   }
 
   const lines = checks.map(c => {
@@ -131,9 +257,9 @@ export async function handleDoctor(
     return `${status}  ${c.detail}${fix}`;
   });
 
-  const summary = allOk
+  const summaryLine = allOk
     ? `${color.green('All checks passed.')}`
     : `${color.red('Some checks failed.')} ${color.yellow('See fixes above.')}`;
 
-  return `${summary}\n\n${lines.join('\n')}`;
+  return `${summaryLine}\n\n${lines.join('\n')}`;
 }

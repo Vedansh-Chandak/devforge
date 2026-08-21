@@ -10,7 +10,14 @@ export { createProgram, run, type CommandHandler } from './orchestrator.js';
 export { createLightContext, createExecutionContext } from './session.js';
 export type { LightCliContext, ExecutionContext, ExecutionServices, LightServices, CommandSessionContext } from './session.js';
 export { runEnvironmentChecks, isLightweightCommand, type HealthCheck } from './environment.js';
-export { loadConfig, loadFromEnv, loadJsonFile, userConfigPath, validateConfig, isProviderKind, type ConfigValidationResult } from './config-loader.js';
+export { loadConfig, loadFromEnv, loadJsonFile, userConfigPath, validateConfig, isProviderKind, type ConfigValidationResult, type CredentialSource } from './config-loader.js';
+export {
+  resolveModelRoutes,
+  summarizeRoleRoutes,
+  hasExplicitModelConfig,
+  type ResolvedRoutePayload,
+  type RoleRouteStatus,
+} from './model-routes.js';
 export {
   color,
   writeJson,
