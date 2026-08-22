@@ -178,6 +178,7 @@ export function parseEnvConfig(
     DEVFORGE_MODEL: env.DEVFORGE_MODEL,
     DEVFORGE_MODEL_BASE_URL: env.DEVFORGE_MODEL_BASE_URL,
     DEVFORGE_MODEL_API_KEY: env.DEVFORGE_MODEL_API_KEY,
+    TOKENROUTER_API_KEY: env.TOKENROUTER_API_KEY,
     DEVFORGE_MODEL_TIMEOUT_MS: env.DEVFORGE_MODEL_TIMEOUT_MS,
     DEVFORGE_MODEL_MAX_RETRIES: env.DEVFORGE_MODEL_MAX_RETRIES,
     DEVFORGE_REASONING_MODEL: env.DEVFORGE_REASONING_MODEL,
@@ -271,6 +272,9 @@ function buildProviderConfigFromEnv(env: DevForgeEnvConfig): ModelProviderConfig
   ): ModelProviderConfig => {
     if (env.DEVFORGE_MODEL_API_KEY) {
       (config as { apiKey?: string }).apiKey = env.DEVFORGE_MODEL_API_KEY;
+    } else if (env.TOKENROUTER_API_KEY) {
+      // Generic OpenAI-compatible gateway key fallback; no dedicated provider.
+      (config as { apiKey?: string }).apiKey = env.TOKENROUTER_API_KEY;
     }
     if (env.DEVFORGE_MODEL_TIMEOUT_MS) {
       const timeout = parseInt(env.DEVFORGE_MODEL_TIMEOUT_MS, 10);

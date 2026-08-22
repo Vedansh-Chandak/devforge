@@ -104,10 +104,13 @@ const DEFAULT_ENV_KEYS = {
   provider: 'DEVFORGE_MODEL_PROVIDER',
   model: 'DEVFORGE_MODEL',
   baseUrl: 'DEVFORGE_MODEL_BASE_URL',
-  apiKey: 'DEVFORGE_MODEL_API_KEY',
+  // The canonical DEVFORGE_* key wins; TOKENROUTER_API_KEY is a generic
+  // fallback for OpenAI-compatible gateways that publish their key under a
+  // vendor-standard variable. No dedicated provider is required.
+  apiKey: ['DEVFORGE_MODEL_API_KEY', 'TOKENROUTER_API_KEY'],
   timeoutMs: 'DEVFORGE_MODEL_TIMEOUT_MS',
   maxRetries: 'DEVFORGE_MODEL_MAX_RETRIES',
-} as const;
+};
 
 const ROLE_ENV_KEYS: Readonly<Record<ModelSelectionRole, string>> = {
   reasoning: 'DEVFORGE_REASONING_MODEL',
@@ -141,13 +144,14 @@ export function parseModelConfigEnv(
     def.provider = provider;
   }
 
-  for (const [key, envName] of Object.entries(DEFAULT_ENV_KEYS) as Array<
-    [keyof ModelConfig, string]
-  >) {
+  for (const [key, envNames] of Object.entries(DEFAULT_ENV_KEYS)) {
     if (key === 'provider') continue;
-    const raw = env[envName];
+    const candidates: string[] = Array.isArray(envNames) ? [...envNames] : [envNames];
+    const raw = candidates
+      .map((name) => env[name])
+      .find((value) => value !== undefined && value.trim().length > 0);
     if (raw === undefined) continue;
-    if (NUMERIC_KEYS.has(key)) {
+    if (NUMERIC_KEYS.has(key as keyof ModelConfig)) {
       const num = parseNumber(raw);
       if (num !== undefined) def[key] = num;
     } else {

@@ -100,6 +100,8 @@ export interface DevForgeEnvConfig {
   DEVFORGE_MODEL?: string;
   DEVFORGE_MODEL_BASE_URL?: string;
   DEVFORGE_MODEL_API_KEY?: string;
+  /** Vendor-standard OpenAI-compatible gateway key (generic fallback). */
+  TOKENROUTER_API_KEY?: string;
   DEVFORGE_MODEL_TIMEOUT_MS?: string;
   DEVFORGE_MODEL_MAX_RETRIES?: string;
   DEVFORGE_REASONING_MODEL?: string;
