@@ -44,16 +44,30 @@ export interface ModelConfigurationSummary {
   readonly routes: readonly ResolvedRoutePayload[];
 }
 
-/** Run a shell command and return success + trimmed output (best-effort). */
+/**
+ * Run a shell command and return success + trimmed output (best-effort).
+ *
+ * Results are memoized process-wide and the probe is bounded by a short
+ * timeout: `doctor` re-runs tool checks per detected role, and a pathological
+ * toolchain must degrade gracefully rather than hang the whole inspection.
+ */
+const CHECK_TIMEOUT_MS = 3_000;
+const checkCache = new Map<string, { ok: boolean; output: string }>();
+
 function runCheck(cmd: string): { ok: boolean; output: string } {
+  const cached = checkCache.get(cmd);
+  if (cached !== undefined) return cached;
+  let result: { ok: boolean; output: string };
   try {
-    const out = execSync(cmd, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10_000 });
-    return { ok: true, output: out.trim().split('\n')[0] ?? '' };
+    const out = execSync(cmd, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: CHECK_TIMEOUT_MS });
+    result = { ok: true, output: out.trim().split('\n')[0] ?? '' };
   } catch (error) {
     const e = error as { stderr?: string; stdout?: string };
     const detail = e.stderr?.trim().split('\n')[0] ?? e.stdout?.trim().split('\n')[0] ?? String(error);
-    return { ok: false, output: detail };
+    result = { ok: false, output: detail };
   }
+  checkCache.set(cmd, result);
+  return result;
 }
 
 /**

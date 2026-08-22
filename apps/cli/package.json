@@ -16,7 +16,7 @@
     "node": ">=18"
   },
   "bin": {
-    "devforge": "./dist/main.js"
+    "devforge": "dist/main.js"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

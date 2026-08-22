@@ -54,10 +54,10 @@ beforeAll(() => {
   // Guarantee a complete, self-contained dist (including the bundled
   // index.d.ts) before packing. The CLI `test` task does not depend on the
   // package's own `build` in turbo, so we build it here to keep the test
-  // independent of ambient build state / task ordering.
-  if (!existsSync(join(distDir, 'index.d.ts')) || !existsSync(join(distDir, 'main.js'))) {
-    execFileSync('node', [join(pkgRoot, 'scripts', 'build.mjs')], { stdio: 'inherit' });
-  }
+  // independent of ambient build state / task ordering. The build always wipes
+  // `dist/` first, so the artifact set is deterministic and free of any
+  // stale/duplicate files.
+  execFileSync('node', [join(pkgRoot, 'scripts', 'build.mjs')], { stdio: 'inherit' });
   // Pack once into the package root, then install from an isolated copy so
   // this suite never races with packaging.test.ts over the tarball filename.
   execFileSync('npm', ['pack', '--silent'], { cwd: pkgRoot });

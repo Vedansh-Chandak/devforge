@@ -21,16 +21,34 @@ export interface HealthCheck {
   readonly fix?: string;
 }
 
-/** Run a shell command and return success + trimmed output (best-effort). */
+/**
+ * Run a shell command and return success + trimmed output (best-effort).
+ *
+ * Results are memoized process-wide: `doctor`/`config` may be invoked many
+ * times (once per command and per resolved route) and re-probing the same
+ * PATH tool on every call is wasteful and — in constrained/isolated
+ * environments — can dominate command latency. Health probes are also bounded
+ * by a short timeout so a pathological toolchain (e.g. a package manager that
+ * blocks on first invocation under an isolated HOME) degrades gracefully to a
+ * "not found" check instead of hanging the whole inspection.
+ */
+const CHECK_TIMEOUT_MS = 3_000;
+const checkCache = new Map<string, { ok: boolean; output: string }>();
+
 function runCheck(cmd: string): { ok: boolean; output: string } {
+  const cached = checkCache.get(cmd);
+  if (cached !== undefined) return cached;
+  let result: { ok: boolean; output: string };
   try {
-    const out = execSync(cmd, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10_000 });
-    return { ok: true, output: out.trim().split('\n')[0] ?? '' };
+    const out = execSync(cmd, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: CHECK_TIMEOUT_MS });
+    result = { ok: true, output: out.trim().split('\n')[0] ?? '' };
   } catch (error) {
     const e = error as { stderr?: string; stdout?: string };
     const detail = e.stderr?.trim().split('\n')[0] ?? e.stdout?.trim().split('\n')[0] ?? String(error);
-    return { ok: false, output: detail };
+    result = { ok: false, output: detail };
   }
+  checkCache.set(cmd, result);
+  return result;
 }
 
 /**

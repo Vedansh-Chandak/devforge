@@ -33,12 +33,11 @@ afterAll(() => {
 
 // Guarantee a complete, self-contained dist (including the bundled index.d.ts)
 // before the packaging assertions run. The CLI `test` task does not depend on
-// the package's own `build` in turbo, so we build it here.
+// the package's own `build` in turbo, so we build it here. The build always
+// wipes `dist/` first, so the artifact set is deterministic and free of any
+// stale/duplicate files regardless of ambient build state.
 beforeAll(() => {
-  const dist = join(pkgRoot, 'dist');
-  if (!existsSync(join(dist, 'index.d.ts')) || !existsSync(join(dist, 'main.js'))) {
-    execFileSync('node', [join(pkgRoot, 'scripts', 'build.mjs')], { stdio: 'inherit' });
-  }
+  execFileSync('node', [join(pkgRoot, 'scripts', 'build.mjs')], { stdio: 'inherit' });
 });
 
 function run(cmd: string, args: readonly string[], opts: { cwd: string; env?: NodeJS.ProcessEnv }) {
