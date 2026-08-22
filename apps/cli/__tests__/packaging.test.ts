@@ -22,7 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
 const distDir = join(pkgRoot, 'dist');
-const tarball = join(pkgRoot, 'devforge-cli-0.1.0.tgz');
+const tarball = join(pkgRoot, 'vedansh78-cli-0.1.1.tgz');
 
 let installDir: string | undefined;
 
@@ -74,7 +74,7 @@ describe('DF-029A CLI packaging (npm readiness)', () => {
     expect(installDir || stdout).toBeTruthy();
     const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
     const file = lines[lines.length - 1];
-    expect(file).toContain('devforge-cli-0.1.0.tgz');
+    expect(file).toContain('vedansh78-cli-0.1.1.tgz');
 
     const { stdout: list } = run('tar', ['-tzf', file], { cwd: pkgRoot });
     const names = list.trim().split(/\r?\n/);
@@ -107,7 +107,7 @@ describe('DF-029A CLI packaging (npm readiness)', () => {
 
   it('installed bin runs version, help, status, config, and doctor offline', () => {
     expect(installDir).toBeTruthy();
-    const bin = join(installDir, 'node_modules', '.bin', 'devforge');
+    const bin = join(installDir as string, 'node_modules', '.bin', 'devforge');
     const env = {
       DEVFORGE_PROVIDER: 'fake',
       DEVFORGE_LOG_LEVEL: 'error',
@@ -116,7 +116,7 @@ describe('DF-029A CLI packaging (npm readiness)', () => {
 
     const version = run(bin, ['--version'], { cwd: installDir as string, env });
     expect(version.code).toBe(0);
-    expect(version.stdout.trim()).toBe('0.1.0');
+    expect(version.stdout.trim()).toBe('0.1.1');
 
     const help = run(bin, ['--help'], { cwd: installDir as string, env });
     expect(help.code).toBe(0);
@@ -139,20 +139,20 @@ describe('DF-029A CLI packaging (npm readiness)', () => {
     expect(installDir).toBeTruthy();
     const cjs = join(installDir as string, 'probe.cjs');
     execFileSync('node', ['-e', `
-      const cli = require('@devforge/cli');
+      const cli = require('@vedansh78/cli');
       if (typeof cli.validateConfig !== 'function') throw new Error('CJS missing validateConfig');
       if (typeof cli.DEFAULT_CONFIG !== 'object') throw new Error('CJS missing DEFAULT_CONFIG');
       console.log('cjs-ok');
     `], { cwd: installDir as string });
     execFileSync('node', ['-e', `
-      import('@devforge/cli').then(cli => {
+      import('@vedansh78/cli').then(cli => {
         if (typeof cli.createLightContext !== 'function') throw new Error('ESM missing createLightContext');
         if (typeof cli.Logger !== 'function') throw new Error('ESM missing Logger');
         console.log('esm-ok');
       });
     `], { cwd: installDir as string });
 
-    const pkg = JSON.parse(readFileSync(join(installDir as string, 'node_modules/@devforge/cli/package.json'), 'utf8'));
+    const pkg = JSON.parse(readFileSync(join(installDir as string, 'node_modules/@vedansh78/cli/package.json'), 'utf8'));
     expect(pkg.type).toBe('module');
     expect(pkg.exports['.']).toHaveProperty('import');
     expect(pkg.exports['.']).toHaveProperty('require');
@@ -165,7 +165,7 @@ describe('DF-029A CLI packaging (npm readiness)', () => {
 
   it('installed dist references no workspace dirs and no leaked declarations', () => {
     expect(installDir).toBeTruthy();
-    const dist = join(installDir as string, 'node_modules/@devforge/cli/dist');
+    const dist = join(installDir as string, 'node_modules/@vedansh78/cli/dist');
     const files = readdirSync(dist);
     // Only the four bundled artifacts ship.
     expect(files.sort()).toEqual(['index.cjs', 'index.d.ts', 'index.js', 'main.js']);

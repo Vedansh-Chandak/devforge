@@ -28,14 +28,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
 const distDir = join(pkgRoot, 'dist');
-const tarball = join(pkgRoot, 'devforge-cli-0.1.0.tgz');
+const tarball = join(pkgRoot, 'vedansh78-cli-0.1.1.tgz');
 const SECRET = 'sk-ant-SUPERSECRETVALUE1234567890abcdef';
 
 let installDir: string | undefined;
 
 /** Run the installed bin in a fully isolated env (only DEVFORGE_* + minimal PATH). */
 function isolate(cwd: string, home: string, args: readonly string[], env: NodeJS.ProcessEnv = {}) {
-  const result = spawnSync('node', [join(installDir!, 'node_modules', '@devforge', 'cli', 'dist', 'main.js'), ...args], {
+  const result = spawnSync('node', [join(installDir!, 'node_modules', '@vedansh78', 'cli', 'dist', 'main.js'), ...args], {
     cwd,
     env: {
       HOME: home,
@@ -62,7 +62,7 @@ beforeAll(() => {
   // this suite never races with packaging.test.ts over the tarball filename.
   execFileSync('npm', ['pack', '--silent'], { cwd: pkgRoot });
   installDir = mkdtempSync(join(tmpdir(), 'devforge-df029c-'));
-  const localTarball = join(installDir, 'devforge-cli-0.1.0.tgz');
+  const localTarball = join(installDir, 'vedansh78-cli-0.1.1.tgz');
   execFileSync('cp', [tarball, localTarball]);
   execFileSync('npm', ['init', '-y'], { cwd: installDir });
   execFileSync('npm', ['install', '--no-audit', '--no-fund', localTarball], { cwd: installDir });
@@ -135,7 +135,7 @@ describe('DF-029C isolated install', () => {
   });
 
   it('installed dist is whitelisted and self-contained', () => {
-    const dist = join(installDir!, 'node_modules', '@devforge', 'cli', 'dist');
+    const dist = join(installDir!, 'node_modules', '@vedansh78', 'cli', 'dist');
     expect(readdirSync(dist).sort()).toEqual(['index.cjs', 'index.d.ts', 'index.js', 'main.js']);
     for (const f of readdirSync(dist)) {
       const src = readFileSync(join(dist, f), 'utf8');
@@ -155,7 +155,7 @@ describe('DF-029C core commands offline (isolated HOME)', () => {
         expect(r.code, `devforge ${args.join(' ')} should exit 0`).toBe(0);
       }
       const v = isolate(work, home, ['--version']);
-      expect(v.stdout.trim()).toBe('0.1.0');
+      expect(v.stdout.trim()).toBe('0.1.1');
     } finally {
       rmSync(work, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });
@@ -317,19 +317,19 @@ describe('DF-029C exit codes & JSON', () => {
 describe('DF-029C ESM/CJS interop from the installed package', () => {
   it('supports both import() and require() and resolves real deps only', () => {
     execFileSync('node', ['-e', `
-      const c = require('@devforge/cli');
+      const c = require('@vedansh78/cli');
       if (typeof c.validateConfig !== 'function') throw new Error('CJS missing validateConfig');
       if (typeof c.DEFAULT_CONFIG !== 'object') throw new Error('CJS missing DEFAULT_CONFIG');
       if (typeof c.createLightContext !== 'function') throw new Error('CJS missing createLightContext');
     `], { cwd: installDir });
     execFileSync('node', ['-e', `
-      import('@devforge/cli').then(c => {
+      import('@vedansh78/cli').then(c => {
         if (typeof c.validateConfig !== 'function') throw new Error('ESM missing validateConfig');
         if (typeof c.Logger !== 'function') throw new Error('ESM missing Logger');
       });
     `], { cwd: installDir });
 
-    const cli = join(installDir!, 'node_modules', '@devforge', 'cli');
+    const cli = join(installDir!, 'node_modules', '@vedansh78', 'cli');
     const pkg = JSON.parse(readFileSync(join(cli, 'package.json'), 'utf8'));
     expect(pkg.type).toBe('module');
     expect(pkg.exports['.']).toHaveProperty('import');

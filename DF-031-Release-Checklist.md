@@ -1,7 +1,7 @@
 # DF-031 — Release Checklist: DevForge CLI 0.1.0
 
 **Goal:** Prepare the Git repository for the first *human-controlled* public
-release of `@devforge/cli@0.1.0`.
+release of `@vedansh78/cli@0.1.0`.
 
 **Hard constraints (enforced):**
 - No `npm publish` / `pnpm publish` executed by this phase.
@@ -22,7 +22,7 @@ release of `@devforge/cli@0.1.0`.
 | Root | `pnpm build` | ✅ 26 / 26 |
 | Root | `pnpm test` | ✅ 46 / 46 |
 | Root | `pnpm lint` | ✅ 3 / 3 |
-| CLI | `pnpm --filter @devforge/cli build` | ✅ self-contained, sanitized |
+| CLI | `pnpm --filter @vedansh78/cli build` | ✅ self-contained, sanitized |
 | CLI | `npm pack --dry-run` | ✅ 8 files, see below |
 
 ### Package audit
@@ -50,7 +50,7 @@ package.json      2.1 kB
 ### Version
 
 - `apps/cli/package.json` → `"version": "0.1.0"` ✅
-- npm registry (`npm view @devforge/cli version`) → **404 Not Found** ✅
+- npm registry (`npm view @vedansh78/cli version`) → **404 Not Found** ✅
   (package has NOT been published yet).
 
 ### Git review
@@ -76,7 +76,7 @@ Reviewed working-tree changes produced by DF-030 (release-readiness only):
 
 **Notes / cautions:**
 - `apps/cli/dist/**` is gitignored (root `.gitignore`) → not committed. Correct.
-- `apps/cli/devforge-cli-0.1.0.tgz` (a prior `npm pack` artifact) was **removed**
+- `apps/cli/vedansh78-cli-0.1.0.tgz` (a prior `npm pack` artifact) was **removed**
   by this phase to keep the tree clean. It is NOT gitignored, so before running
   `git add -A`, confirm **no `*.tgz`** is present/staged. (It is only regenerated
   by `npm pack`, which runs after the commit — so it will not appear at commit time.)
@@ -134,7 +134,7 @@ npm publish --access public
 After the tag is pushed and `npm publish` succeeds, verify the live package:
 
 ```bash
-npm install -g @devforge/cli@0.1.0
+npm install -g @vedansh78/cli@0.1.0
 devforge --version        # expect: 0.1.0
 devforge doctor           # expect: exit 0 (offline fake provider on fresh install)
 devforge config           # expect: exit 0 (masked API key, resolved routes)

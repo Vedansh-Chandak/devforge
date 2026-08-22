@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Brain Service (M1).
+ * @vedansh78/cli — Brain Service (M1).
  *
  * Creates the model provider from configuration, initializes the DevForgeRuntime
  * and DevForgeBrain, and exposes a simple ask() method. Provider construction

@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — ask command (M2).
+ * @vedansh78/cli — ask command (M2).
  *
  * Full autonomous pipeline: CLI → Repository Discovery → Repository Indexer → Brain → Planner → Executor → Workspace → Verification → Execution Report
  */

@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — plan command (M2).
+ * @vedansh78/cli — plan command (M2).
  *
  * Brain → Planner → Print ExecutionPlan
  * Do not execute.

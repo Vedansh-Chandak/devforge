@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — run command (M2).
+ * @vedansh78/cli — run command (M2).
  *
  * Planner → Executor (generate plan, then execute it).
  */

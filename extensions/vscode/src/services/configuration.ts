@@ -12,7 +12,7 @@ import type {
   ExtensionLogLevel,
 } from '../types.js';
 import { toCliOptions } from '../types.js';
-import type { CliOptions } from '@devforge/cli';
+import type { CliOptions } from '@vedansh78/cli';
 import { ExtensionConfigError } from '../errors.js';
 
 /** Default values for every extension setting. */

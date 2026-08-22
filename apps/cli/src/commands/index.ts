@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Commands (M1).
+ * @vedansh78/cli — Commands (M1).
  */
 
 export { handleAsk } from './ask.js';

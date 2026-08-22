@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Orchestrator (M1).
+ * @vedansh78/cli — Orchestrator (M1).
  *
  * Bootstraps the CLI: sets up the commander program with all commands, lazily
  * builds a CLI session per invocation, dispatches to command handlers, and
@@ -25,7 +25,7 @@ export function createProgram(
   program
     .name('devforge')
     .description('DevForge — Autonomous coding agent')
-    .version('0.1.0')
+    .version('0.1.1')
     .option('-j, --json', 'Output as JSON')
     .option('-d, --debug', 'Enable debug logging')
     .option('-y, --yes', 'Auto-approve confirmation steps (autonomous mode)')

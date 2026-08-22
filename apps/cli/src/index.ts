@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — public exports (M1).
+ * @vedansh78/cli — public exports (M1).
  *
  * Exposes the program builder and bootstrap entry for programmatic use and
  * integration testing.

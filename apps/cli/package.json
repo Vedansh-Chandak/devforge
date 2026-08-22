@@ -1,6 +1,6 @@
 {
-  "name": "@devforge/cli",
-  "version": "0.1.0",
+  "name": "@vedansh78/cli",
+  "version": "0.1.1",
   "description": "DevForge — autonomous coding agent CLI. Ask, plan, review, fix, explain, and run DevForge from your terminal.",
   "license": "MIT",
   "type": "module",

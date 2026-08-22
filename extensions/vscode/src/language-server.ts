@@ -411,7 +411,7 @@ export interface RepositoryProvider {
 /** Convert a CLI RepositoryContext into a snapshot (lazy CLI import). */
 export const cliRepositoryProvider: RepositoryProvider = async (root: string) => {
   try {
-    const { discoverRepository } = await import('@devforge/cli');
+    const { discoverRepository } = await import('@vedansh78/cli');
     const repository = await discoverRepository(root);
     return {
       root: repository.root,

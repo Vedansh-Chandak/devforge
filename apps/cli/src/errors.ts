@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — CLI error types (M1).
+ * @vedansh78/cli — CLI error types (M1).
  *
  * Typed errors with a stable machine code plus a human-facing rendering layer.
  * Stack traces are only rendered in --debug mode.

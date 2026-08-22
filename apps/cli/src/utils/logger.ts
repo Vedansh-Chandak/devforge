@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Logger (M1).
+ * @vedansh78/cli — Logger (M1).
  *
  * Lightweight leveled logger that writes to stderr so structured command
  * output on stdout stays clean for --json.

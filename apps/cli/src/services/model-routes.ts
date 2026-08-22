@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Model route resolution service (DF-029B).
+ * @vedansh78/cli — Model route resolution service (DF-029B).
  *
  * Shared, side-effect-free resolution of the effective role→provider mapping
  * for display commands (`doctor`, `config`). Delegates to the ModelRouter

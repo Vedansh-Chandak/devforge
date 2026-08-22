@@ -11,7 +11,7 @@ import type {
   ExecutionContext,
   LightCliContext,
   RepositoryContext,
-} from '@devforge/cli';
+} from '@vedansh78/cli';
 import type { GitDiff } from '@devforge/execution';
 import type { ExecutionPlan, PlanResult } from '@devforge/planner';
 

@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Workspace Service (M1).
+ * @vedansh78/cli — Workspace Service (M1).
  *
  * Discovers the repository context and provides Workspace, GitService,
  * and CommandRunner instances wired to the discovered root.

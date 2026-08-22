@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Progress service (M1).
+ * @vedansh78/cli — Progress service (M1).
  *
  * A minimal single-line spinner writing to stderr. Disabled when stderr is not
  * a TTY or when JSON output is requested, so machine-readable output stays clean.

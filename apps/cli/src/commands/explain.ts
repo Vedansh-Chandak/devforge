@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — explain command (M2).
+ * @vedansh78/cli — explain command (M2).
  *
  * Repository Indexer → Parser → Knowledge Graph → Brain → Markdown explanation
  * No planner. No executor.

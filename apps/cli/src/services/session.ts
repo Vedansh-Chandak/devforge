@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — CLI Session Service (DF-017.1).
+ * @vedansh78/cli — CLI Session Service (DF-017.1).
  *
  * Builds the CLI context passed to command handlers. Context creation is split
  * into two tiers so that commands which do not require AI or execution never

@@ -4,7 +4,7 @@
 **Date:** 2026-08-21
 **Author:** automated release-readiness audit (DF-029A + DF-029B context)
 **Stop condition:** A developer with a clean machine can install the generated
-`@devforge/cli` tarball and run `devforge --help`, `devforge --version`,
+`@vedansh78/cli` tarball and run `devforge --help`, `devforge --version`,
 `devforge doctor`, and `devforge config` **outside the DevForge monorepo**, with
 no accidental workspace/runtime dependency, secret, source-control artifact, or
 development-only artifact in the package.
@@ -15,7 +15,7 @@ development-only artifact in the package.
 
 ## 1. Release architecture
 
-`@devforge/cli` is a **single, self-contained npm package** (`apps/cli`). Its
+`@vedansh78/cli` is a **single, self-contained npm package** (`apps/cli`). Its
 production artifact is produced by `apps/cli/scripts/build.mjs`, which:
 
 1. **Inlines all 14 `@devforge/*` workspace packages** via esbuild `alias`
@@ -39,7 +39,7 @@ The package is published via the standard `files` whitelist (`dist`,
 
 ---
 
-## 2. Package contents (tarball `devforge-cli-0.1.0.tgz`)
+## 2. Package contents (tarball `vedansh78-cli-0.1.0.tgz`)
 
 Verified with `tar -tzf` — **exactly 7 entries**, no source-control files, no
 tests, no fixtures, no temp files, no sourcemaps:
@@ -72,15 +72,15 @@ Reproducible from a clean machine:
 
 ```bash
 # 1. build the self-contained artifact
-pnpm --filter @devforge/cli build
+pnpm --filter @vedansh78/cli build
 
 # 2. produce the tarball
-cd apps/cli && npm pack --silent   # -> devforge-cli-0.1.0.tgz
+cd apps/cli && npm pack --silent   # -> vedansh78-cli-0.1.0.tgz
 
 # 3. install into a directory OUTSIDE the monorepo (no pnpm, no turbo, no repo)
 ISO=$(mktemp -d /tmp/devforge-iso)
 cd "$ISO" && npm init -y >/dev/null
-npm install --no-audit --no-fund /path/to/devforge-cli-0.1.0.tgz
+npm install --no-audit --no-fund /path/to/vedansh78-cli-0.1.0.tgz
 
 # 4. run with a fresh HOME and no monorepo on PATH
 env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=$(mktemp -d) \
@@ -89,7 +89,7 @@ env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=$(mktemp -d) \
 ```
 
 Observed result: `npm install` resolves **41 packages** (the 5 declared deps +
-their trees), creates `node_modules/@devforge/cli` only, and reports **no
+their trees), creates `node_modules/@vedansh78/cli` only, and reports **no
 `workspace:` and no `@devforge/` resolution**. The installed bin subsequently
 runs every core command offline.
 
@@ -183,15 +183,15 @@ referenced value lives in memory and is masked in all display.
 
 Against the **installed** package (not the monorepo):
 
-- **CommonJS:** `require('@devforge/cli')` exposes `validateConfig`,
+- **CommonJS:** `require('@vedansh78/cli')` exposes `validateConfig`,
   `DEFAULT_CONFIG`, `createLightContext`, `Logger`, etc. ✅
-- **ESM:** `import('@devforge/cli')` exposes `validateConfig`, `Logger`, etc. ✅
+- **ESM:** `import('@vedansh78/cli')` exposes `validateConfig`, `Logger`, etc. ✅
 - **Exports map:** `package.json` `exports["."]` has `types`, `import`,
   `require`, `default` — covers every resolution path the extension uses.
 - **Typed consumer:** a strict `tsc -p tsconfig.json --noEmit` module
   `nodenext` consumer that imports `validateConfig`, `DEFAULT_CONFIG`,
   `Logger`, and types `DevForgeConfig`/`LightCliContext` from
-  `@devforge/cli` resolves cleanly from `dist/index.d.ts`. ✅
+  `@vedansh78/cli` resolves cleanly from `dist/index.d.ts`. ✅
 
 ---
 
@@ -228,7 +228,7 @@ payloads carry `apiKey: "***"` (or absent) and redacted routes.
 
 | Field | Value |
 | --- | --- |
-| `name` | `@devforge/cli` |
+| `name` | `@vedansh78/cli` |
 | `version` | `0.1.0` |
 | `description` | "DevForge — autonomous coding agent CLI. …" |
 | `license` | `MIT` |
@@ -242,7 +242,7 @@ payloads carry `apiKey: "***"` (or absent) and redacted routes.
 `createLightContext`, `createExecutionContext`, `validateConfig`,
 `discoverRepository`, `createProvider`, `DEFAULT_CONFIG`, `CliError`,
 `ConfigError`, `Logger`, …) was checked against `src/index.ts` — **all present**.
-The `npm install -g @devforge/cli` and `Node >= 18` instructions match the
+The `npm install -g @vedansh78/cli` and `Node >= 18` instructions match the
 package. **One discrepancy was found and fixed:** the Configuration section
 described `devforge.config.json` / `~/.devforge.json`, but the actual resolved
 paths are `.devforge.json` (project) and `~/.devforge/config.json` (user).
@@ -272,7 +272,7 @@ locations (§12).
   file locations and precedence (was `devforge.config.json` / `~/.devforge.json`).
 
 **Regenerated (gitignored, not committed):**
-- `apps/cli/dist/**`, `apps/cli/devforge-cli-0.1.0.tgz`.
+- `apps/cli/dist/**`, `apps/cli/vedansh78-cli-0.1.0.tgz`.
 
 No Brain / Planner / Executor / Autonomous / Multi-Agent architecture was
 modified. No new model provider was added. No publish, no commit.
@@ -329,9 +329,9 @@ real network calls or credential use**.
 
 | Scope | Command | Result |
 | --- | --- | --- |
-| CLI | `pnpm --filter @devforge/cli check-types` | ✅ pass |
-| CLI | `pnpm --filter @devforge/cli build` | ✅ self-contained, sanitized |
-| CLI | `pnpm --filter @devforge/cli test` | ✅ **158 / 158** (143 + 15 new) |
+| CLI | `pnpm --filter @vedansh78/cli check-types` | ✅ pass |
+| CLI | `pnpm --filter @vedansh78/cli build` | ✅ self-contained, sanitized |
+| CLI | `pnpm --filter @vedansh78/cli test` | ✅ **158 / 158** (143 + 15 new) |
 | VS Code | `pnpm --filter @devforge/vscode-extension check-types` | ✅ pass (against new `dist`) |
 | Root | `pnpm check-types` | ✅ **26 / 26** |
 | Root | `pnpm build` | ✅ **26 / 26** |
@@ -346,7 +346,7 @@ real network calls or credential use**.
 
 ## 16. Conclusion
 
-A developer with a clean machine **can** install `devforge-cli-0.1.0.tgz` into a
+A developer with a clean machine **can** install `vedansh78-cli-0.1.0.tgz` into a
 directory outside the DevForge monorepo and immediately run `devforge --help`,
 `devforge --version`, `devforge doctor`, and `devforge config` — all exit 0
 offline, with configuration resolved from env / project / user files per the

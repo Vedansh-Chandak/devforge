@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @devforge/cli — entry point.
+ * @vedansh78/cli — entry point.
  *
  * Runs the bootstrap and sets the process exit code.
  */

@@ -175,7 +175,7 @@
     "package": "vsce package --no-dependencies"
   },
   "dependencies": {
-    "@devforge/cli": "workspace:*",
+    "@vedansh78/cli": "workspace:*",
     "@devforge/execution": "workspace:*",
     "@devforge/planner": "workspace:*",
     "vscode-languageclient": "^9.0.1",

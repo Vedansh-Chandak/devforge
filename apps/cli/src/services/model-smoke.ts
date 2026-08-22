@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Model smoke checks (DF-028 Phase 2).
+ * @vedansh78/cli — Model smoke checks (DF-028 Phase 2).
  *
  * An OPT-IN connectivity check that runs a tiny generation against every
  * configured model route and verifies a normalized {@link ModelResponse}

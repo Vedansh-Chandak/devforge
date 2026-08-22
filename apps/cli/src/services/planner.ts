@@ -1,7 +1,7 @@
 
 
 /**
- * @devforge/cli — Planner Service (M1).
+ * @vedansh78/cli — Planner Service (M1).
  *
  * Creates a Planner instance wired to the model provider, and exposes a
  * plan() method that returns a deterministic or model-backed plan.

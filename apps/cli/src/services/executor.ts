@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Executor Service (M1).
+ * @vedansh78/cli — Executor Service (M1).
  *
  * Creates the full execution stack: Workspace, GitService, CommandRunner,
  * CodingModel/ReasoningModel, PatchEngine, CodingEngine, and the Executor

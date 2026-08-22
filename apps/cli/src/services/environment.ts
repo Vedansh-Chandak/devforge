@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Environment checks (DF-017.1).
+ * @vedansh78/cli — Environment checks (DF-017.1).
  *
  * Lightweight, dependency-free checks that determine what tooling, repository,
  * and provider state are available WITHOUT initializing the AI/execution stack.

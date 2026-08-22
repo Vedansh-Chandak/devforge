@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — review command (M2).
+ * @vedansh78/cli — review command (M2).
  *
  * Git Status → Git Diff → Brain → Reasoning Model → Review Report
  * Includes: bugs, style, security, performance, missing tests

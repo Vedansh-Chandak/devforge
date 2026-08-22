@@ -3,7 +3,7 @@
  *
  * The single integration point between the extension host and the DevForge
  * engine. The client never re-implements Brain/Planner/Executor/Workspace or
- * CLI logic — it delegates to the `@devforge/cli` public API (context builders,
+ * CLI logic — it delegates to the `@vedansh78/cli` public API (context builders,
  * command handlers, renderers) through a {@link CliAdapter}. Tests inject a
  * fake adapter for fully deterministic "mocked DevForge integration".
  *
@@ -15,7 +15,7 @@ import type {
   ExecutionContext,
   LightCliContext,
   RepositoryContext,
-} from '@devforge/cli';
+} from '@vedansh78/cli';
 import type { CodingReport, ExecutionReport, GitDiff } from '@devforge/execution';
 import type { PlanResult } from '@devforge/planner';
 import {
@@ -51,7 +51,7 @@ export interface HealthCheckLike {
 }
 
 /**
- * Adapter over the `@devforge/cli` public API. Kept behind an interface so the
+ * Adapter over the `@vedansh78/cli` public API. Kept behind an interface so the
  * client is testable without the real engine.
  */
 export interface CliAdapter {
@@ -338,81 +338,81 @@ function defaultCliOptions(): CliOptions {
 }
 
 /**
- * Real adapter over the `@devforge/cli` public API. Applies extension-level
+ * Real adapter over the `@vedansh78/cli` public API. Applies extension-level
  * environment overrides around context creation so VS Code settings can
  * override disk configuration without modifying the CLI.
  */
 export class RealCliAdapter implements CliAdapter {
   async createLightContext(cwd: string, options: CliOptions, env?: EnvOverrides): Promise<LightCliContext> {
-    const { createLightContext } = await import('@devforge/cli');
+    const { createLightContext } = await import('@vedansh78/cli');
     return withEnv(env ?? {}, () => createLightContext(cwd, options));
   }
 
   async createExecutionContext(cwd: string, options: CliOptions, env?: EnvOverrides): Promise<ExecutionContext> {
-    const { createExecutionContext } = await import('@devforge/cli');
+    const { createExecutionContext } = await import('@vedansh78/cli');
     return withEnv(env ?? {}, () => createExecutionContext(cwd, options));
   }
 
   async handleAsk(ctx: ExecutionContext, question: string): Promise<string | object> {
-    const { handleAsk } = await import('@devforge/cli');
+    const { handleAsk } = await import('@vedansh78/cli');
     return handleAsk(ctx, question);
   }
 
   async handlePlan(ctx: ExecutionContext, goal: string): Promise<string | object> {
-    const { handlePlan } = await import('@devforge/cli');
+    const { handlePlan } = await import('@vedansh78/cli');
     return handlePlan(ctx, goal);
   }
 
   async handleFix(ctx: ExecutionContext, goal: string): Promise<string | object> {
-    const { handleFix } = await import('@devforge/cli');
+    const { handleFix } = await import('@vedansh78/cli');
     return handleFix(ctx, goal);
   }
 
   async handleReview(ctx: ExecutionContext): Promise<string | object> {
-    const { handleReview } = await import('@devforge/cli');
+    const { handleReview } = await import('@vedansh78/cli');
     return handleReview(ctx);
   }
 
   async handleRun(ctx: ExecutionContext, goal: string): Promise<string | object> {
-    const { handleRun } = await import('@devforge/cli');
+    const { handleRun } = await import('@vedansh78/cli');
     return handleRun(ctx, goal);
   }
 
   async handleExplain(ctx: ExecutionContext, topic: string): Promise<string | object> {
-    const { handleExplain } = await import('@devforge/cli');
+    const { handleExplain } = await import('@vedansh78/cli');
     return handleExplain(ctx, topic);
   }
 
   async handleStatus(ctx: LightCliContext): Promise<string | object> {
-    const { handleStatus } = await import('@devforge/cli');
+    const { handleStatus } = await import('@vedansh78/cli');
     return handleStatus(ctx);
   }
 
   async handleDoctor(ctx: LightCliContext): Promise<string | object> {
-    const { handleDoctor } = await import('@devforge/cli');
+    const { handleDoctor } = await import('@vedansh78/cli');
     return handleDoctor(ctx);
   }
 
   async runHealthChecks(ctx: LightCliContext): Promise<{ checks: readonly HealthCheckLike[]; allOk: boolean }> {
-    const { runHealthChecks } = await import('@devforge/cli');
+    const { runHealthChecks } = await import('@vedansh78/cli');
     return runHealthChecks(ctx);
   }
 
   async renderPlanResult(result: PlanResult): Promise<string> {
     if (result.ok) {
-      const { renderPlan } = await import('@devforge/cli');
+      const { renderPlan } = await import('@vedansh78/cli');
       return renderPlan(result.plan, { useColor: false });
     }
     return `Planning failed: [${result.error.code}] ${result.error.message}`;
   }
 
   async renderCodingReport(report: CodingReport): Promise<string> {
-    const { renderCodingReport } = await import('@devforge/cli');
+    const { renderCodingReport } = await import('@vedansh78/cli');
     return renderCodingReport(report);
   }
 
   async renderExecutionReport(report: ExecutionReport): Promise<string> {
-    const { renderExecutionReport } = await import('@devforge/cli');
+    const { renderExecutionReport } = await import('@vedansh78/cli');
     return renderExecutionReport(report);
   }
 }

@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — config command (M1, DF-026C, DF-029B).
+ * @vedansh78/cli — config command (M1, DF-026C, DF-029B).
  *
  * Show the resolved configuration and which sources it came from. Secret
  * values (apiKey) are always masked. `--json` emits a structured object.

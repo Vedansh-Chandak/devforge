@@ -167,15 +167,15 @@ importers:
 
   extensions/vscode:
     dependencies:
-      '@devforge/cli':
-        specifier: workspace:*
-        version: link:../../apps/cli
       '@devforge/execution':
         specifier: workspace:*
         version: link:../../packages/execution
       '@devforge/planner':
         specifier: workspace:*
         version: link:../../packages/planner
+      '@vedansh78/cli':
+        specifier: workspace:*
+        version: link:../../apps/cli
       vscode-languageclient:
         specifier: ^9.0.1
         version: 9.0.1

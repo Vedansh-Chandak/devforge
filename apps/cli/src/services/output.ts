@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Output service (M1).
+ * @vedansh78/cli — Output service (M1).
  *
  * Renders command results as either human-readable text or JSON. The CLI never
  * prints JSON by default; --json switches every command to a single JSON blob

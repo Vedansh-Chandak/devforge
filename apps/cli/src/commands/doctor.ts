@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — doctor command (M1, DF-029B).
+ * @vedansh78/cli — doctor command (M1, DF-029B).
  *
  * Run health checks: workspace, provider, git, node, pnpm, configuration,
  * plus tool-specific checks using the shared environment service.

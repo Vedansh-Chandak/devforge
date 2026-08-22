@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — fix command (M2).
+ * @vedansh78/cli — fix command (M2).
  *
  * Autonomous coding: analyze → generate patches → apply → verify → repair.
  * Uses the CodingEngine directly (no planner).

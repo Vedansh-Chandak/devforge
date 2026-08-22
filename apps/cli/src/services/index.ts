@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Services subsystem (M1).
+ * @vedansh78/cli — Services subsystem (M1).
  */
 
 export { discoverRepository, createWorkspaceService, type RepositoryContext, type WorkspaceService } from './workspace.js';

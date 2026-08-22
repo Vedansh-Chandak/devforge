@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — status command (M1).
+ * @vedansh78/cli — status command (M1).
  *
  * Print workspace, provider, selected model, repository, branch, engine version.
  */
@@ -24,7 +24,7 @@ export async function handleStatus(ctx: LightCliContext): Promise<string> {
     ['Model', config.model ?? '(default)'],
     ['Temperature', String(config.temperature ?? 0.2)],
     ['Max repair attempts', String(config.maxRepairAttempts ?? 3)],
-    ['Engine version', '0.1.0'],
+    ['Engine version', '0.1.1'],
     ['Build command', repository.buildCommand ?? 'not detected'],
     ['Test command', repository.testCommand ?? 'not detected'],
     ['Lint command', repository.lintCommand ?? 'not detected'],

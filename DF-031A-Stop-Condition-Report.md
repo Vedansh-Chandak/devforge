@@ -2,7 +2,7 @@
 
 **Phase:** DF-031A — Fix the 9 failing CLI release/acceptance tests
 **Date:** 2026-08-22
-**Stop condition:** `apps/cli` test suite is green (158/158), `dist/` contains exactly the four intended self-contained artifacts, `npm pack` produces `devforge-cli-0.1.0.tgz` with only the published surface, root `check-types`/`build`/`test`/`lint` are green, and the public package identity is `@devforge/cli` (bin `devforge`). No publish, no commit, no tag.
+**Stop condition:** `apps/cli` test suite is green (158/158), `dist/` contains exactly the four intended self-contained artifacts, `npm pack` produces `vedansh78-cli-0.1.0.tgz` with only the published surface, root `check-types`/`build`/`test`/`lint` are green, and the public package identity is `@vedansh78/cli` (bin `devforge`). No publish, no commit, no tag.
 
 ## 1. Root causes of the 9 failures
 
@@ -11,7 +11,7 @@
 - Each unit test builds its context through `makeCtx`, which calls `runEnvironmentChecks` → `pnpm --version`. Under the tests' isolated temp `HOME` (set by `beforeEach`) inside the vitest worker, `pnpm --version` hangs until the 10s `execSync` timeout. With multiple `makeCtx` calls per test, the 5s per-test vitest budget was exceeded → timeout failures. The provider/model path itself is offline and fast; the slowness was purely the repeated, never-cached subprocess probe.
 
 ### Group 2 — wrong tarball name (1 of the 9)
-- `apps/cli/package.json` declared `"name": "@vedansh78/cli"`. `npm pack` therefore emitted `vedansh78-cli-0.1.0.tgz`, but the release tests (and the whole workspace convention) expect `@devforge/cli` → `devforge-cli-0.1.0.tgz`. All other `@devforge/*` packages use the `@devforge` scope and the tests `require('@devforge/cli')` / `import('@devforge/cli')` after install, so `@devforge/cli` is the intended public identity.
+- `apps/cli/package.json` declared `"name": "@vedansh78/cli"`. `npm pack` therefore emitted `vedansh78-cli-0.1.0.tgz`, but the release tests (and the whole workspace convention) expect `@vedansh78/cli` → `vedansh78-cli-0.1.0.tgz`. All other `@devforge/*` packages use the `@devforge` scope and the tests `require('@vedansh78/cli')` / `import('@vedansh78/cli')` after install, so `@vedansh78/cli` is the intended public identity.
 
 ### Group 3 — duplicate `dist` artifacts (3 of the 9)
 - `dist/` contained macOS "duplicate" files (`index 2.cjs`, `index 2.js`, `index.d 2.ts`, `main 2.js`) created outside the build (Finder/manual copy).
@@ -19,24 +19,24 @@
 
 ## 2. Fixes applied (5 files)
 
-1. **`apps/cli/package.json`** — `name` → `@devforge/cli` (bin `devforge` unchanged). Now matches workspace convention, the release docs, and the `pnpm --filter @devforge/cli` task commands.
+1. **`apps/cli/package.json`** — `name` → `@vedansh78/cli` (bin `devforge` unchanged). Now matches workspace convention, the release docs, and the `pnpm --filter @vedansh78/cli` task commands.
 2. **`src/services/environment.ts`** — `runCheck` results are now memoized process-wide and the `execSync` timeout is bounded (3s) so a pathological toolchain degrades to a "not found" check instead of hanging the inspection. Behavior of `doctor`/`config` is unchanged (checks still run; `pnpm`/`git`/`node` availability is still reported).
 3. **`src/commands/doctor.ts`** — same memoized + bounded `runCheck` for the tool checks (`tsc`/`eslint`/test/build), so repeated `doctor` invocations do not re-probe.
 4. **`__tests__/packaging.test.ts`** — `beforeAll` now **always** runs `scripts/build.mjs`. The build wipes `dist/` first, guaranteeing a deterministic, duplicate-free artifact set regardless of ambient state.
 5. **`__tests__/release-readiness.test.ts`** — same `beforeAll` change (always rebuild).
 
-Plus cleanup: removed the untracked macOS duplicate files (`* 2.*` / `* 3.*`) that had leaked into the working tree, including the stale `dist` duplicates and the wrong `vedansh78-cli-0.1.0.tgz`.
+Plus cleanup: removed the untracked macOS duplicate files (`* 2.*` / `* 3.*`) that had leaked into the working tree, including the stale `dist` duplicates and any stale generated tarballs.
 
 ## 3. Verification (all green)
 
-- `pnpm --filter @devforge/cli check-types` — pass.
-- `pnpm --filter @devforge/cli build` — pass; `dist/` = `index.cjs`, `index.d.ts`, `index.js`, `main.js` (exactly 4).
-- `pnpm --filter @devforge/cli test` — **158 passed / 158** (previously 149 passed + 9 failed).
+- `pnpm --filter @vedansh78/cli check-types` — pass.
+- `pnpm --filter @vedansh78/cli build` — pass; `dist/` = `index.cjs`, `index.d.ts`, `index.js`, `main.js` (exactly 4).
+- `pnpm --filter @vedansh78/cli test` — **158 passed / 158** (previously 149 passed + 9 failed).
 - `pnpm check-types` — 26/26 tasks.
 - `pnpm build` — 26/26 tasks.
 - `pnpm test` — 46/46 tasks.
 - `pnpm lint` — 3/3 tasks.
-- `npm pack` — `devforge-cli-0.1.0.tgz`, 8 files (README, LICENSE, CHANGELOG, package.json, 4 dist artifacts); no `*.test.ts`, no `__tests__`, no `.env`, no secrets, no repo-relative paths.
+- `npm pack` — `vedansh78-cli-0.1.0.tgz`, 8 files (README, LICENSE, CHANGELOG, package.json, 4 dist artifacts); no `*.test.ts`, no `__tests__`, no `.env`, no secrets, no repo-relative paths.
 - Isolated install (`npm install <tarball>` in a throwaway dir) resolves only real npm deps; `devforge --version`/`--help`/`doctor`/`config` work offline; ESM `import` and CJS `require` both resolve `validateConfig`/`createLightContext` etc.
 
 ## 4. Constraints honored

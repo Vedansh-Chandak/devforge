@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Shared type definitions (M1).
+ * @vedansh78/cli — Shared type definitions (M1).
  *
  * Configuration schema plus the CLI/session option types used across commands.
  */

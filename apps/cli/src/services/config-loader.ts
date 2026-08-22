@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — Config loader service (M1, DF-029B).
+ * @vedansh78/cli — Config loader service (M1, DF-029B).
  *
  * Loads configuration from, in order of precedence (highest wins):
  *

@@ -2,7 +2,7 @@
 
 **Phase:** DF-030 — DevForge First Public Release Preparation
 **Date:** 2026-08-21
-**Package:** `@devforge/cli`
+**Package:** `@vedansh78/cli`
 **Prerequisite phases:** DF-029A (packaging), DF-029B (first-run config), DF-029C (release audit) — all complete and green.
 
 > **`npm publish` was NOT executed.** This phase prepares the release; publishing
@@ -30,7 +30,7 @@
 
 | Field | Value |
 | --- | --- |
-| `name` | `@devforge/cli` |
+| `name` | `@vedansh78/cli` |
 | `version` | `0.1.0` |
 | `description` | "DevForge — autonomous coding agent CLI. Ask, plan, review, fix, explain, and run DevForge from your terminal." |
 | `license` | `MIT` |
@@ -60,7 +60,7 @@ was guessed.
 
 ---
 
-## 3. Included artifacts (tarball `devforge-cli-0.1.0.tgz`)
+## 3. Included artifacts (tarball `vedansh78-cli-0.1.0.tgz`)
 
 `npm pack` produces exactly **8** entries (verified with `tar -tzf`):
 
@@ -85,8 +85,8 @@ sourcemaps, no temporary files, no secrets.
 From the published registry (post-publish):
 
 ```bash
-npm install -g @devforge/cli     # global
-npx @devforge/cli <command>      # without installing
+npm install -g @vedansh78/cli     # global
+npx @vedansh78/cli <command>      # without installing
 ```
 
 Requires **Node.js >= 18**.
@@ -94,7 +94,7 @@ Requires **Node.js >= 18**.
 From the generated tarball (this audit):
 
 ```bash
-npm install --no-audit --no-fund ./apps/cli/devforge-cli-0.1.0.tgz
+npm install --no-audit --no-fund ./apps/cli/vedansh78-cli-0.1.0.tgz
 ```
 
 ---
@@ -144,9 +144,9 @@ output.
 
 | Scope | Command | Result |
 | --- | --- | --- |
-| CLI | `pnpm --filter @devforge/cli check-types` | ✅ pass |
-| CLI | `pnpm --filter @devforge/cli build` | ✅ self-contained, sanitized |
-| CLI | `pnpm --filter @devforge/cli test` | ✅ **158 / 158** (143 prior + 15 DF-029C + updated assertions) |
+| CLI | `pnpm --filter @vedansh78/cli check-types` | ✅ pass |
+| CLI | `pnpm --filter @vedansh78/cli build` | ✅ self-contained, sanitized |
+| CLI | `pnpm --filter @vedansh78/cli test` | ✅ **158 / 158** (143 prior + 15 DF-029C + updated assertions) |
 | Root | `pnpm check-types` | ✅ **26 / 26** |
 | Root | `pnpm build` | ✅ **26 / 26** |
 | Root | `pnpm test` | ✅ **46 / 46** (includes CLI 158/158) |
@@ -166,7 +166,7 @@ Performed in a directory **outside the monorepo** (`/tmp/...`), with `env -i`
 (isolated environment), `HOME` set to a fresh temp dir, and no monorepo path on
 `PATH`:
 
-- `npm install --no-audit --no-fund devforge-cli-0.1.0.tgz` → exit 0, **41 packages**
+- `npm install --no-audit --no-fund vedansh78-cli-0.1.0.tgz` → exit 0, **41 packages**
   resolved (the 5 real runtime deps + their trees).
 - `node_modules/@devforge` contains **only `cli`** — no sibling workspace links.
 - Install resolution logs contain **no `@devforge/` and no `workspace:`**.
@@ -238,7 +238,7 @@ The package is **independently runnable outside the DevForge monorepo**.
   test no longer depends on ambient/turbo build ordering.
 
 **Regenerated (gitignored, not committed):**
-- `apps/cli/dist/**`, `apps/cli/devforge-cli-0.1.0.tgz`.
+- `apps/cli/dist/**`, `apps/cli/vedansh78-cli-0.1.0.tgz`.
 
 No Brain / Planner / Executor / Autonomous / Multi-Agent architecture was
 modified. No new provider was added. No publish, no commit.
@@ -252,7 +252,7 @@ The package is built and packed. To publish:
 ```bash
 # 1. (optional) preview what will be published
 cd apps/cli
-npm pack                       # already done: devforge-cli-0.1.0.tgz
+npm pack                       # already done: vedansh78-cli-0.1.0.tgz
 npm publish --dry-run          # inspect the tarball that would be sent
 
 # 2. authenticate (one time)
@@ -274,7 +274,7 @@ After publishing, create the GitHub release/tag `v0.1.0` referenced by
 
 ## 13. Conclusion
 
-`@devforge/cli@0.1.0` is prepared for its first public release:
+`@vedansh78/cli@0.1.0` is prepared for its first public release:
 
 - Metadata is complete and accurate (`name`, `version`, `description`,
   `license`, `repository`, `homepage`, `bugs`, `bin`, `exports`, `files`,

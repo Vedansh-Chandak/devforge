@@ -1,5 +1,5 @@
 /**
- * @devforge/cli — production build (DF-029A).
+ * @vedansh78/cli — production build (DF-029A).
  *
  * Produces a self-contained, publishable artifact:
  *
@@ -16,12 +16,21 @@
  */
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
+
+// Build into a private per-process temp dir so concurrent invocations (e.g. two
+// test files' beforeAll, or the turbo `build` task racing a test) never corrupt
+// each other's `dist/`. The verified artifact is atomically swapped into
+// `dist/` at the end.
+const finalDist = resolve(pkgRoot, 'dist');
+const workDir = resolve(pkgRoot, `.build-tmp-${process.pid}`);
+rmSync(workDir, { recursive: true, force: true });
+mkdirSync(workDir, { recursive: true });
 const bin = resolve(pkgRoot, 'node_modules', '.bin');
 
 /** Declared runtime (non-workspace) dependencies — the only external imports. */
@@ -65,45 +74,41 @@ const common = {
   absWorkingDir: pkgRoot,
 };
 
-// 1. Clean
-rmSync(resolve(pkgRoot, 'dist'), { recursive: true, force: true });
-mkdirSync(resolve(pkgRoot, 'dist'), { recursive: true });
-
-// 2. Bundles
+// 1. Bundles
 await build({
   ...common,
   entryPoints: [resolve(pkgRoot, 'src', 'main.ts')],
-  outfile: resolve(pkgRoot, 'dist', 'main.js'),
+  outfile: resolve(workDir, 'main.js'),
 });
 await build({
   ...common,
   entryPoints: [resolve(pkgRoot, 'src', 'index.ts')],
-  outfile: resolve(pkgRoot, 'dist', 'index.js'),
+  outfile: resolve(workDir, 'index.js'),
 });
 await build({
   ...common,
   format: 'cjs',
   entryPoints: [resolve(pkgRoot, 'src', 'index.ts')],
-  outfile: resolve(pkgRoot, 'dist', 'index.cjs'),
+  outfile: resolve(workDir, 'index.cjs'),
 });
 
-// 3. Make the bin executable
-chmodSync(resolve(pkgRoot, 'dist', 'main.js'), 0o755);
+// 2. Make the bin executable
+chmodSync(resolve(workDir, 'main.js'), 0o755);
 
-// 3b. Strip esbuild's monorepo path artifacts from the published dist:
+// 2b. Strip esbuild's monorepo path artifacts from the published dist:
 //     (a) `// ../../packages/<pkg>/src/...` chunk-separator comments, and
 //     (b) `"../../packages/<pkg>/src/..."` `__esm` chunk keys. Both reveal
 //     the DevForge monorepo layout and must not ship (release-readiness: no
 //     repository-relative paths in the artifact). Keys are replaced with
 //     neutral unique tokens to preserve esbuild's module-initialization map.
-for (const out of [resolve(pkgRoot, 'dist', 'main.js'), resolve(pkgRoot, 'dist', 'index.js'), resolve(pkgRoot, 'dist', 'index.cjs')]) {
+for (const out of [resolve(workDir, 'main.js'), resolve(workDir, 'index.js'), resolve(workDir, 'index.cjs')]) {
   sanitizeRepoPaths(out);
 }
 
-// 4. Single-file self-contained declarations via dts-bundle-generator.
+// 3. Single-file self-contained declarations via dts-bundle-generator.
 //    Inline every @devforge/* workspace package so consumers never need the
 //    (unpublished) workspace packages for type resolution.
-const dtsOut = resolve(pkgRoot, 'dist', 'index.d.ts');
+const dtsOut = resolve(workDir, 'index.d.ts');
 execFileSync(
   resolve(bin, 'dts-bundle-generator'),
   [
@@ -119,7 +124,11 @@ execFileSync(
 
 fixDeclarations(dtsOut);
 
-console.log('@devforge/cli build complete');
+// 4. Atomically swap the verified artifact into place.
+rmSync(finalDist, { recursive: true, force: true });
+renameSync(workDir, finalDist);
+
+console.log('@vedansh78/cli build complete');
 
 /**
  * dts-bundle-generator inlines module-namespace values by hoisting their

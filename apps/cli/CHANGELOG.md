@@ -1,7 +1,20 @@
 # Changelog
 
-All notable changes to `@devforge/cli` are documented here. This project
+All notable changes to `@vedansh78/cli` are documented here. This project
 follows [Semantic Versioning](https://semver.org/).
+
+## [0.1.1] — 2026-08-22 — Package identity fix (publish scope)
+
+This patch corrects the published package identity so the CLI can be installed
+from npm. There are **no command, architecture, model, or provider changes**;
+the `devforge` binary and all runtime behavior are identical to `0.1.0`.
+
+- Published package renamed from `@devforge/cli` to `@vedansh78/cli` (the
+  publishable npm scope). Install with `npm install -g @vedansh78/cli` or
+  run with `npx @vedansh78/cli`.
+- All `@devforge/*` workspace packages remain internal build-time inputs and are
+  still bundled into the published artifact. Internal package names are unchanged.
+- Shipped tarball: `vedansh78-cli-0.1.1.tgz`.
 
 ## [0.1.0] — 2026-08-21 — First public release
 
@@ -63,3 +76,4 @@ access to the DevForge monorepo.
 DevForge in other tools (e.g. the VS Code extension).
 
 [0.1.0]: https://github.com/Vedansh-Chandak/devforge/releases/tag/v0.1.0
+[0.1.1]: https://github.com/Vedansh-Chandak/devforge/releases/tag/v0.1.1

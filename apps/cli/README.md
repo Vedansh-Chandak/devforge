@@ -1,4 +1,4 @@
-# @devforge/cli
+# @vedansh78/cli
 
 **DevForge — autonomous coding agent CLI.**
 
@@ -10,13 +10,13 @@ fixes, and runs autonomous coding tasks in your repository.
 Requires **Node.js >= 18**.
 
 ```bash
-npm install -g @devforge/cli
+npm install -g @vedansh78/cli
 ```
 
 Or run without installing:
 
 ```bash
-npx @devforge/cli <command>
+npx @vedansh78/cli <command>
 ```
 
 After install, the `devforge` command is available on your `PATH`.
@@ -179,10 +179,10 @@ verified on Node 24 and Node 26.
 
 ```js
 // ESM
-import { createLightContext, validateConfig } from '@devforge/cli';
+import { createLightContext, validateConfig } from '@vedansh78/cli';
 
 // CommonJS
-const { createLightContext, validateConfig } = require('@devforge/cli');
+const { createLightContext, validateConfig } = require('@vedansh78/cli');
 ```
 
 Export surface: `run`, `createProgram`, `createLightContext`,
@@ -196,9 +196,9 @@ self-contained: all `@devforge/*` workspace packages are bundled at build time s
 the installed tarball has zero workspace-only dependencies.
 
 ```bash
-pnpm --filter @devforge/cli build      # bundle ESM/CJS + typed index.d.ts
-pnpm --filter @devforge/cli test       # unit + e2e smoke tests
-pnpm --filter @devforge/cli check-types
+pnpm --filter @vedansh78/cli build      # bundle ESM/CJS + typed index.d.ts
+pnpm --filter @vedansh78/cli test       # unit + e2e smoke tests
+pnpm --filter @vedansh78/cli check-types
 ```
 
 See [`CHANGELOG.md`](./CHANGELOG.md) for release notes.
