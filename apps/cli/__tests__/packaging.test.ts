@@ -22,7 +22,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
 const distDir = join(pkgRoot, 'dist');
-const tarball = join(pkgRoot, 'vedansh78-cli-0.1.1.tgz');
+const pkgVersion = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8')).version;
+const tarball = join(pkgRoot, `vedansh78-cli-${pkgVersion}.tgz`);
 
 let installDir: string | undefined;
 
@@ -74,7 +75,7 @@ describe('DF-029A CLI packaging (npm readiness)', () => {
     expect(installDir || stdout).toBeTruthy();
     const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
     const file = lines[lines.length - 1];
-    expect(file).toContain('vedansh78-cli-0.1.1.tgz');
+    expect(file).toContain(`vedansh78-cli-${pkgVersion}.tgz`);
 
     const { stdout: list } = run('tar', ['-tzf', file], { cwd: pkgRoot });
     const names = list.trim().split(/\r?\n/);
@@ -116,7 +117,7 @@ describe('DF-029A CLI packaging (npm readiness)', () => {
 
     const version = run(bin, ['--version'], { cwd: installDir as string, env });
     expect(version.code).toBe(0);
-    expect(version.stdout.trim()).toBe('0.1.1');
+    expect(version.stdout.trim()).toBe(pkgVersion);
 
     const help = run(bin, ['--help'], { cwd: installDir as string, env });
     expect(help.code).toBe(0);

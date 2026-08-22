@@ -11,6 +11,7 @@ import type { CommandSessionContext, ExecutionContext, LightCliContext } from '.
 import type { CliOptions } from '../types.js';
 import { formatError, CliError } from '../errors.js';
 import { redactSecrets } from '@devforge/config';
+import { ENGINE_VERSION } from '../version.js';
 
 /** Command handler signature. */
 export type CommandHandler = (ctx: CommandSessionContext, ...args: Array<string | boolean>) => Promise<unknown>;
@@ -25,7 +26,7 @@ export function createProgram(
   program
     .name('devforge')
     .description('DevForge — Autonomous coding agent')
-    .version('0.1.1')
+    .version(ENGINE_VERSION)
     .option('-j, --json', 'Output as JSON')
     .option('-d, --debug', 'Enable debug logging')
     .option('-y, --yes', 'Auto-approve confirmation steps (autonomous mode)')

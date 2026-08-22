@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
+const pkgVersion = JSON.parse(readFileSync(resolve(pkgRoot, 'package.json'), 'utf8')).version;
 
 // Build into a private per-process temp dir so concurrent invocations (e.g. two
 // test files' beforeAll, or the turbo `build` task racing a test) never corrupt
@@ -72,6 +73,10 @@ const common = {
   sourcemap: false,
   logLevel: 'info',
   absWorkingDir: pkgRoot,
+  // Inject the package version so the published artifact reports the correct
+  // version without embedding the full package.json (which would leak the
+  // `workspace:*` dev-dependency declarations into dist/).
+  define: { 'process.env.DEVFORGE_PKG_VERSION': JSON.stringify(pkgVersion) },
 };
 
 // 1. Bundles

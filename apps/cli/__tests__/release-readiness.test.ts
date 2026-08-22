@@ -28,7 +28,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
 const distDir = join(pkgRoot, 'dist');
-const tarball = join(pkgRoot, 'vedansh78-cli-0.1.1.tgz');
+const pkgVersion = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8')).version;
+const tarball = join(pkgRoot, `vedansh78-cli-${pkgVersion}.tgz`);
 const SECRET = 'sk-ant-SUPERSECRETVALUE1234567890abcdef';
 
 let installDir: string | undefined;
@@ -62,7 +63,7 @@ beforeAll(() => {
   // this suite never races with packaging.test.ts over the tarball filename.
   execFileSync('npm', ['pack', '--silent'], { cwd: pkgRoot });
   installDir = mkdtempSync(join(tmpdir(), 'devforge-df029c-'));
-  const localTarball = join(installDir, 'vedansh78-cli-0.1.1.tgz');
+  const localTarball = join(installDir, `vedansh78-cli-${pkgVersion}.tgz`);
   execFileSync('cp', [tarball, localTarball]);
   execFileSync('npm', ['init', '-y'], { cwd: installDir });
   execFileSync('npm', ['install', '--no-audit', '--no-fund', localTarball], { cwd: installDir });
@@ -155,7 +156,7 @@ describe('DF-029C core commands offline (isolated HOME)', () => {
         expect(r.code, `devforge ${args.join(' ')} should exit 0`).toBe(0);
       }
       const v = isolate(work, home, ['--version']);
-      expect(v.stdout.trim()).toBe('0.1.1');
+      expect(v.stdout.trim()).toBe(pkgVersion);
     } finally {
       rmSync(work, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });

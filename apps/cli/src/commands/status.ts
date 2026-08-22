@@ -5,6 +5,7 @@
  */
 import type { LightCliContext } from '../services/session.js';
 import { renderStatus } from '../services/output.js';
+import { ENGINE_VERSION } from '../version.js';
 
 /** Handler for `devforge status`. */
 export async function handleStatus(ctx: LightCliContext): Promise<string> {
@@ -24,7 +25,7 @@ export async function handleStatus(ctx: LightCliContext): Promise<string> {
     ['Model', config.model ?? '(default)'],
     ['Temperature', String(config.temperature ?? 0.2)],
     ['Max repair attempts', String(config.maxRepairAttempts ?? 3)],
-    ['Engine version', '0.1.1'],
+    ['Engine version', ENGINE_VERSION],
     ['Build command', repository.buildCommand ?? 'not detected'],
     ['Test command', repository.testCommand ?? 'not detected'],
     ['Lint command', repository.lintCommand ?? 'not detected'],
