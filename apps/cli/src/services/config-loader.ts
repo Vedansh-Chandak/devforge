@@ -56,6 +56,11 @@ const ENV_MAP: Record<string, keyof RawDevForgeConfig> = {
   DEVFORGE_PROVIDER: 'provider',
   DEVFORGE_BASE_URL: 'baseUrl',
   DEVFORGE_API_KEY: 'apiKey',
+  // Vendor-standard OpenAI-compatible gateway key. Recognized as a generic
+  // fallback so a key stored in TOKENROUTER_API_KEY (or any compatible gateway's
+  // standard var) is picked up by the openai-compatible provider without a
+  // dedicated provider implementation. Lower precedence than DEVFORGE_* keys.
+  TOKENROUTER_API_KEY: 'apiKey',
   DEVFORGE_TIMEOUT_MS: 'timeoutMs',
   DEVFORGE_TEMPERATURE: 'temperature',
   DEVFORGE_MAX_REPAIR_ATTEMPTS: 'maxRepairAttempts',

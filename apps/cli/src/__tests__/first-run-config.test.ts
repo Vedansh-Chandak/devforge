@@ -94,7 +94,7 @@ beforeEach(async () => {
   savedHome = process.env.HOME;
   savedDevforge = {};
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith('DEVFORGE_')) {
+    if (key.startsWith('DEVFORGE_') || key === 'TOKENROUTER_API_KEY') {
       savedDevforge[key] = process.env[key];
       delete process.env[key];
     }
@@ -613,5 +613,48 @@ describe('clean temporary HOME / config directory', () => {
     expect(doc.length).toBeGreaterThan(0);
     const cfg = (await handleConfig(makeCtx(dir, config))) as string;
     expect(cfg).toContain('DevForge Config');
+  });
+});
+
+describe('TOKENROUTER_API_KEY resolution (DF-032)', () => {
+  it('resolves the api key from TOKENROUTER_API_KEY for openai-compatible', async () => {
+    const dir = await newDir('df-trkey-');
+    process.env.DEVFORGE_MODEL_PROVIDER = 'openai-compatible';
+    process.env.DEVFORGE_MODEL = 'qwen/qwen3.8-max-free';
+    process.env.DEVFORGE_MODEL_BASE_URL = 'https://api.tokenrouter.com/v1';
+    process.env.TOKENROUTER_API_KEY = 'tr-secret-value';
+
+    const { config, credentialSource } = await loadConfig(dir);
+    expect(config.provider).toBe('openai-compatible');
+    expect(config.model).toBe('qwen/qwen3.8-max-free');
+    expect(config.baseUrl).toBe('https://api.tokenrouter.com/v1');
+    expect(config.apiKey).toBe('tr-secret-value');
+    expect(credentialSource).toBe('environment');
+  });
+
+  it('prefers DEVFORGE_MODEL_API_KEY over TOKENROUTER_API_KEY', async () => {
+    const dir = await newDir('df-trkey2-');
+    process.env.DEVFORGE_MODEL_PROVIDER = 'openai-compatible';
+    process.env.DEVFORGE_MODEL = 'qwen/qwen3.8-max-free';
+    process.env.DEVFORGE_MODEL_BASE_URL = 'https://api.tokenrouter.com/v1';
+    process.env.DEVFORGE_MODEL_API_KEY = 'devforge-secret';
+    process.env.TOKENROUTER_API_KEY = 'tr-secret-value';
+
+    const { config } = await loadConfig(dir);
+    expect(config.apiKey).toBe('devforge-secret');
+  });
+
+  it('surfaces the namespaced model in config output and never leaks the key', async () => {
+    const dir = await newDir('df-trkey3-');
+    process.env.DEVFORGE_MODEL_PROVIDER = 'openai-compatible';
+    process.env.DEVFORGE_MODEL = 'qwen/qwen3.8-max-free';
+    process.env.DEVFORGE_MODEL_BASE_URL = 'https://api.tokenrouter.com/v1';
+    process.env.TOKENROUTER_API_KEY = 'tr-must-not-leak';
+
+    const { config } = await loadConfig(dir);
+    const cfg = (await handleConfig(makeCtx(dir, config))) as string;
+    expect(cfg).toContain('qwen/qwen3.8-max-free');
+    expect(cfg).not.toContain('tr-must-not-leak');
+    expect(cfg).toContain('***');
   });
 });
